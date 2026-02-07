@@ -12,7 +12,7 @@
 {# --- Share link --- #}
 <div class="pool-link-box">
     <input type="text" id="pool-url" value="{{ request.url_root }}pool/{{ pool.id }}" readonly onclick="this.select()">
-    <button class="secondary outline" onclick="copyLink()">Copy</button>
+    <button class="btn btn-outline btn-sm" onclick="copyLink()">Copy</button>
 </div>
 
 {# --- Winner banner --- #}
@@ -27,33 +27,33 @@
 {# --- Action bar --- #}
 <div class="actions-bar">
     {% if not me %}
-        <a href="{{ url_for('join_pool', pool_id=pool.id) }}" role="button">Join Pool</a>
-        <a href="{{ url_for('signin', pool_id=pool.id) }}" role="button" class="secondary outline">Sign Back In</a>
+        <a href="{{ url_for('join_pool', pool_id=pool.id) }}" class="btn btn-primary btn-sm">Join Pool</a>
+        <a href="{{ url_for('signin', pool_id=pool.id) }}" class="btn btn-outline btn-sm">Sign Back In</a>
     {% else %}
-        <small style="align-self: center;">Signed in as <strong>{{ me.display_name }}</strong></small>
+        <span class="signed-in-as">Signed in as <strong>{{ me.display_name }}</strong></span>
     {% endif %}
 
-    <a href="{{ url_for('pool_settings', pool_id=pool.id) }}" role="button" class="secondary outline" style="margin-left: auto;">Settings</a>
+    <a href="{{ url_for('pool_settings', pool_id=pool.id) }}" class="btn btn-outline btn-sm ml-auto">Settings</a>
 </div>
 
 {# --- Pool status controls --- #}
 <div class="actions-bar">
     {% if pool.status == 'open' %}
         <form method="post" action="{{ url_for('lock_pool', pool_id=pool.id) }}">
-            <button class="contrast" onclick="return confirm('Lock the pool? No more predictions will be allowed.')">Lock Predictions</button>
+            <button type="submit" class="btn btn-secondary btn-sm" onclick="return confirm('Lock the pool? No more predictions will be allowed.')">Lock Predictions</button>
         </form>
     {% elif pool.status == 'locked' %}
         <form method="post" action="{{ url_for('reopen_pool', pool_id=pool.id) }}">
-            <button class="secondary">Reopen for Predictions</button>
+            <button type="submit" class="btn btn-outline btn-sm">Reopen for Predictions</button>
         </form>
         {% if pool.all_results_entered %}
         <form method="post" action="{{ url_for('finish_pool', pool_id=pool.id) }}">
-            <button onclick="return confirm('Finish the pool and declare a winner?')">Finish &amp; Declare Winner</button>
+            <button type="submit" class="btn btn-primary btn-sm" onclick="return confirm('Finish the pool and declare a winner?')">Finish &amp; Declare Winner</button>
         </form>
         {% endif %}
     {% elif pool.status == 'finished' %}
         <form method="post" action="{{ url_for('reopen_pool', pool_id=pool.id) }}">
-            <button class="secondary outline">Reopen Pool</button>
+            <button type="submit" class="btn btn-outline btn-sm">Reopen Pool</button>
         </form>
     {% endif %}
 </div>
@@ -69,8 +69,8 @@
 {% for match in pool.matches %}
 <div class="match-card {% if match.result %}has-result{% endif %}">
     <div class="match-header">
-        <span>Match {{ loop.index }}</span>
-        <span>{{ match.points }} pt{{ 's' if match.points != 1 }}</span>
+        <span class="match-label">Match {{ loop.index }}</span>
+        <span class="match-points">{{ match.points }} pt{{ 's' if match.points != 1 }}</span>
     </div>
     <div class="fighters">
         {% set my_pick = my_predictions.get(match.id) %}
@@ -126,18 +126,18 @@
             {% elif match.result == 'b' %}{{ match.participant_b }}
             {% else %}Draw{% endif %}</strong>
             · <form method="post" action="{{ url_for('clear_result', pool_id=pool.id, match_id=match.id) }}" style="display:inline;">
-                <button type="submit" class="secondary outline" style="padding:0.2rem 0.5rem; font-size:0.75rem; margin:0;">Clear</button>
+                <button type="submit" class="btn btn-outline btn-sm" style="padding:0.15rem 0.4rem; font-size:0.7rem; vertical-align: middle;">Clear</button>
             </form>
         </div>
     {% elif pool.status in ('locked', 'finished') %}
         <div class="result-btns">
-            <form method="post" action="{{ url_for('enter_result', pool_id=pool.id, match_id=match.id) }}" style="display:contents;">
+            <form method="post" action="{{ url_for('enter_result', pool_id=pool.id, match_id=match.id) }}">
                 <input type="hidden" name="result" value="a">
-                <button type="submit" class="secondary outline">{{ match.participant_a }} wins</button>
+                <button type="submit" class="btn btn-outline btn-sm">{{ match.participant_a }} wins</button>
             </form>
-            <form method="post" action="{{ url_for('enter_result', pool_id=pool.id, match_id=match.id) }}" style="display:contents;">
+            <form method="post" action="{{ url_for('enter_result', pool_id=pool.id, match_id=match.id) }}">
                 <input type="hidden" name="result" value="b">
-                <button type="submit" class="secondary outline">{{ match.participant_b }} wins</button>
+                <button type="submit" class="btn btn-outline btn-sm">{{ match.participant_b }} wins</button>
             </form>
         </div>
     {% endif %}
@@ -145,40 +145,40 @@
 {% endfor %}
 
 {% if me and pool.status == 'open' %}
-    <button type="submit" style="width: 100%; margin-top: 0.5rem;">Save My Predictions</button>
+    <button type="submit" class="btn btn-primary btn-full mt-1">Save My Predictions</button>
 </form>
 {% endif %}
 
 {% else %}
-<p>No matches yet. <a href="{{ url_for('pool_settings', pool_id=pool.id) }}">Add some matches</a> to get started.</p>
+<p class="mt-2" style="color: var(--text-muted);">No matches yet. <a href="{{ url_for('pool_settings', pool_id=pool.id) }}">Add some matches</a> to get started.</p>
 {% endif %}
 
 {# --- All picks (visible when locked/finished) --- #}
 {% if pool.status in ('locked', 'finished') and pool.participants and pool.matches %}
 <div class="section-title">Everyone's Picks</div>
-<div style="overflow-x: auto;">
+<div class="overflow-x">
 <table>
     <thead>
         <tr>
-            <th>Match</th>
+            <th style="text-align:left;">Match</th>
             {% for p in leaderboard %}
-            <th style="text-align:center;">{{ p.display_name }}</th>
+            <th>{{ p.display_name }}</th>
             {% endfor %}
         </tr>
     </thead>
     <tbody>
         {% for match in pool.matches %}
         <tr>
-            <td style="font-size:0.85rem;">{{ match.participant_a }} vs {{ match.participant_b }}</td>
+            <td>{{ match.participant_a }} vs {{ match.participant_b }}</td>
             {% for p in leaderboard %}
                 {% set pick = all_predictions.get(p.id, {}).get(match.id) %}
-                <td style="text-align:center; font-size:0.85rem;">
+                <td>
                     {% if pick == 'a' %}
-                        <span {% if match.result == 'a' %}style="color:#28a745;font-weight:bold;"{% elif match.result and match.result != 'a' %}style="color:#dc3545;text-decoration:line-through;"{% endif %}>
+                        <span {% if match.result == 'a' %}style="color:var(--green);font-weight:700;"{% elif match.result and match.result != 'a' %}style="color:var(--red-wrong);text-decoration:line-through;"{% endif %}>
                             {{ match.participant_a }}
                         </span>
                     {% elif pick == 'b' %}
-                        <span {% if match.result == 'b' %}style="color:#28a745;font-weight:bold;"{% elif match.result and match.result != 'b' %}style="color:#dc3545;text-decoration:line-through;"{% endif %}>
+                        <span {% if match.result == 'b' %}style="color:var(--green);font-weight:700;"{% elif match.result and match.result != 'b' %}style="color:var(--red-wrong);text-decoration:line-through;"{% endif %}>
                             {{ match.participant_b }}
                         </span>
                     {% else %}
@@ -228,7 +228,7 @@ function copyLink() {
     const input = document.getElementById('pool-url');
     input.select();
     navigator.clipboard.writeText(input.value).then(() => {
-        const btn = input.nextElementSibling;
+        const btn = input.parentElement.querySelector('.btn');
         btn.textContent = 'Copied!';
         setTimeout(() => btn.textContent = 'Copy', 2000);
     });

@@ -5,19 +5,21 @@
 {% block subheader %}{{ pool.name }}{% endblock %}
 
 {% block content %}
-<form method="post">
-    <label for="name">Your Name</label>
-    <input type="text" name="name" id="name" placeholder="e.g. Daniël" required autofocus>
+<div class="card" style="margin-top: 1.5rem;">
+    <form method="post">
+        <label for="name">Your Name</label>
+        <input type="text" name="name" id="name" placeholder="e.g. Daniël" required autofocus>
 
-    <label for="pin">Choose a 4-digit PIN</label>
-    <input type="password" name="pin" id="pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4"
-           placeholder="e.g. 1234" required>
-    <small class="muted">You'll need this to edit your predictions later.</small>
+        <label for="pin">Choose a 4-Digit PIN</label>
+        <input type="password" name="pin" id="pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4"
+               placeholder="e.g. 1234" required>
+        <small class="muted">You'll need this to edit your predictions later.</small>
 
-    <button type="submit" style="margin-top: 1rem; width: 100%;">Join Pool</button>
-</form>
+        <button type="submit" class="btn btn-primary btn-full mt-2">Join Pool</button>
+    </form>
+</div>
 
-<p style="text-align: center; margin-top: 1rem;">
-    <small>Already joined? <a href="{{ url_for('signin', pool_id=pool.id) }}">Sign back in</a></small>
+<p class="text-center mt-2">
+    <small class="muted">Already joined? <a href="{{ url_for('signin', pool_id=pool.id) }}">Sign back in</a></small>
 </p>
 {% endblock %}
