@@ -16,10 +16,27 @@ from fighter_lookup import lookup_fighter
 from odds_lookup import lookup_odds
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(32))
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
-    'DATABASE_URL', 'sqlite:///pool.db'
-)
+# Use a stable secret key: env var, or fall back to a file-based key so
+# sessions survive server restarts during development.
+def _get_or_create_secret_key():
+    env_key = os.environ.get('SECRET_KEY')
+    if env_key:
+        return env_key
+    key_file = os.path.join(os.path.dirname(__file__), 'instance', '.secret_key')
+    os.makedirs(os.path.dirname(key_file), exist_ok=True)
+    if os.path.exists(key_file):
+        with open(key_file) as f:
+            return f.read().strip()
+    key = secrets.token_hex(32)
+    with open(key_file, 'w') as f:
+        f.write(key)
+    return key
+
+app.config['SECRET_KEY'] = _get_or_create_secret_key()
+database_url = os.environ.get('DATABASE_URL', 'sqlite:///pool.db')
+if database_url.startswith('postgres://'):
+    database_url = database_url.replace('postgres://', 'postgresql://', 1)
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)

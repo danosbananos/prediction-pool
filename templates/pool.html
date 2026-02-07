@@ -64,6 +64,10 @@
 
 {% if me and pool.status == 'open' %}
 <form method="post" action="{{ url_for('save_predictions', pool_id=pool.id) }}">
+{% elif not me and pool.status == 'open' %}
+<div class="flash info" style="margin-bottom: 1rem;">
+    <a href="{{ url_for('signin', pool_id=pool.id) }}">Sign in</a> or <a href="{{ url_for('join_pool', pool_id=pool.id) }}">join the pool</a> to make your predictions.
+</div>
 {% endif %}
 
 {% for match in pool.matches %}
