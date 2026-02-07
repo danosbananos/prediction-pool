@@ -79,13 +79,29 @@
         {% if me and pool.status == 'open' %}
             <button type="button" class="fighter-btn {% if my_pick == 'a' %}selected{% endif %}"
                     onclick="togglePick(this, '{{ match.id }}', 'a')">
-                {{ match.participant_a }}
+                <div class="fighter-cell">
+                    {% if match.fighter_a_image %}
+                        <img src="{{ match.fighter_a_image }}" alt="{{ match.participant_a }}" class="fighter-photo">
+                    {% endif %}
+                    <span>{{ match.fighter_a_flag }} {{ match.participant_a }}</span>
+                    {% if match.fighter_a_record %}
+                        <span class="fighter-meta"><span class="record">{{ match.fighter_a_record }}</span></span>
+                    {% endif %}
+                </div>
             </button>
         {% else %}
             <div class="fighter-btn
                 {% if match.result == 'a' %}winner-highlight{% endif %}
                 {% if my_pick == 'a' and match.result == 'a' %}correct{% elif my_pick == 'a' and match.result and match.result != 'a' %}wrong{% elif my_pick == 'a' %}selected{% endif %}">
-                {{ match.participant_a }}
+                <div class="fighter-cell">
+                    {% if match.fighter_a_image %}
+                        <img src="{{ match.fighter_a_image }}" alt="{{ match.participant_a }}" class="fighter-photo">
+                    {% endif %}
+                    <span>{{ match.fighter_a_flag }} {{ match.participant_a }}</span>
+                    {% if match.fighter_a_record %}
+                        <span class="fighter-meta"><span class="record">{{ match.fighter_a_record }}</span></span>
+                    {% endif %}
+                </div>
             </div>
         {% endif %}
 
@@ -95,13 +111,29 @@
         {% if me and pool.status == 'open' %}
             <button type="button" class="fighter-btn {% if my_pick == 'b' %}selected{% endif %}"
                     onclick="togglePick(this, '{{ match.id }}', 'b')">
-                {{ match.participant_b }}
+                <div class="fighter-cell">
+                    {% if match.fighter_b_image %}
+                        <img src="{{ match.fighter_b_image }}" alt="{{ match.participant_b }}" class="fighter-photo">
+                    {% endif %}
+                    <span>{{ match.fighter_b_flag }} {{ match.participant_b }}</span>
+                    {% if match.fighter_b_record %}
+                        <span class="fighter-meta"><span class="record">{{ match.fighter_b_record }}</span></span>
+                    {% endif %}
+                </div>
             </button>
         {% else %}
             <div class="fighter-btn
                 {% if match.result == 'b' %}winner-highlight{% endif %}
                 {% if my_pick == 'b' and match.result == 'b' %}correct{% elif my_pick == 'b' and match.result and match.result != 'b' %}wrong{% elif my_pick == 'b' %}selected{% endif %}">
-                {{ match.participant_b }}
+                <div class="fighter-cell">
+                    {% if match.fighter_b_image %}
+                        <img src="{{ match.fighter_b_image }}" alt="{{ match.participant_b }}" class="fighter-photo">
+                    {% endif %}
+                    <span>{{ match.fighter_b_flag }} {{ match.participant_b }}</span>
+                    {% if match.fighter_b_record %}
+                        <span class="fighter-meta"><span class="record">{{ match.fighter_b_record }}</span></span>
+                    {% endif %}
+                </div>
             </div>
         {% endif %}
 
