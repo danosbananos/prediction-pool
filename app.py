@@ -589,6 +589,45 @@ def refetch_fighter_data_route(pool_id, match_id):
     return redirect(url_for('pool_settings', pool_id=pool_id))
 
 
+@app.route('/pool/<pool_id>/fetch-all-fighter-data', methods=['POST'])
+def fetch_all_fighter_data(pool_id):
+    pool = get_pool_or_404(pool_id)
+    fetched = 0
+    not_found = []
+
+    for match in pool.matches:
+        # Determine which fighters are missing data
+        has_a = bool(match.fighter_a_record or match.fighter_a_image)
+        has_b = bool(match.fighter_b_record or match.fighter_b_image)
+
+        if has_a and has_b:
+            continue  # both fighters already have data
+
+        try:
+            result = fetch_fighter_data(match, skip_a=has_a, skip_b=has_b)
+            if not has_a and not result['found_a']:
+                not_found.append(match.participant_a)
+            if not has_b and not result['found_b']:
+                not_found.append(match.participant_b)
+            if (not has_a and result['found_a']) or (not has_b and result['found_b']):
+                fetched += 1
+        except Exception:
+            not_found.append(f"{match.participant_a} / {match.participant_b}")
+
+    db.session.commit()
+
+    if fetched == 0 and not not_found:
+        flash('All fighters already have data.', 'success')
+    elif fetched > 0 and not not_found:
+        flash(f'Fighter data fetched for {fetched} match(es).', 'success')
+    elif fetched > 0 and not_found:
+        flash(f'Data fetched for {fetched} match(es), but nothing found for: {", ".join(not_found)}.', 'error')
+    else:
+        flash(f'No data found for: {", ".join(not_found)}.', 'error')
+
+    return redirect(url_for('pool_settings', pool_id=pool_id))
+
+
 # ---------------------------------------------------------------------------
 # Routes — Odds (manual entry + re-fetch)
 # ---------------------------------------------------------------------------

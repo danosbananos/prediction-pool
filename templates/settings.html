@@ -57,6 +57,11 @@
 
 {# --- Matches --- #}
 <div class="section-title">Matches ({{ pool.matches|length }})</div>
+{% if pool.matches %}
+<form method="post" action="{{ url_for('fetch_all_fighter_data', pool_id=pool.id) }}" style="margin-bottom: 1rem;">
+    <button type="submit" class="btn btn-outline btn-sm">Fetch Missing Fighter Data</button>
+</form>
+{% endif %}
 
 {% for match in pool.matches %}
 <div class="match-settings-card">
