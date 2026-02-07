@@ -61,6 +61,7 @@ Ideas for future versions, collected during initial planning. Not in scope for v
 - Fix flags not displaying at fighter names (possibly related to the "None" issue)
 - Review the fetch fighter data feature — currently not producing results
 - Investigate deployment without re-creating the database (likely cause of lost pool data on last deploy)
+- Hide predictions from other participants until the pool is locked
 
 ## Data & Analytics
 - Prediction accuracy stats per user over time
