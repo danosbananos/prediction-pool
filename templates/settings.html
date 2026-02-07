@@ -20,12 +20,47 @@
     </form>
 </div>
 
+{# --- CSV Upload --- #}
+<div class="section-title">Import Matches from CSV</div>
+<div class="card">
+    <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+        Upload a CSV to bulk-import matches with optional odds and fighter data.
+        <a href="{{ url_for('csv_template', pool_id=pool.id) }}">Download template</a>
+    </p>
+    <div class="csv-schema">
+        <div class="csv-schema-title">CSV columns</div>
+        <div class="csv-schema-cols">
+            <span class="csv-col required">fighter_a</span>
+            <span class="csv-col required">fighter_b</span>
+            <span class="csv-col optional">multiplier</span>
+            <span class="csv-col optional">odds_a</span>
+            <span class="csv-col optional">odds_b</span>
+            <span class="csv-col optional">fighter_a_record</span>
+            <span class="csv-col optional">fighter_a_nationality</span>
+            <span class="csv-col optional">fighter_b_record</span>
+            <span class="csv-col optional">fighter_b_nationality</span>
+            <span class="csv-col optional">fighter_a_image</span>
+            <span class="csv-col optional">fighter_b_image</span>
+        </div>
+        <p style="font-size: 0.72rem; color: var(--text-dim); margin-top: 0.4rem;">
+            Only <strong>fighter_a</strong> and <strong>fighter_b</strong> are required. All other columns are optional.
+            Missing fighter data will be auto-fetched from Wikipedia.
+        </p>
+    </div>
+    <form method="post" action="{{ url_for('upload_csv', pool_id=pool.id) }}" enctype="multipart/form-data" style="margin-top: 0.75rem;">
+        <div class="inline-form">
+            <input type="file" name="csv_file" accept=".csv" required style="flex: 1; font-size: 0.85rem;">
+            <button type="submit" class="btn btn-primary btn-sm">Upload CSV</button>
+        </div>
+    </form>
+</div>
+
 {# --- Matches --- #}
 <div class="section-title">Matches ({{ pool.matches|length }})</div>
 
 {% for match in pool.matches %}
 <div class="match-settings-card">
-    <h4>{{ match.fighter_a_flag }} {{ match.participant_a }} vs {{ match.participant_b }} {{ match.fighter_b_flag }} <small class="muted">({{ match.points }} pts)</small></h4>
+    <h4>{{ match.fighter_a_flag }} {{ match.participant_a }} vs {{ match.participant_b }} {{ match.fighter_b_flag }} <small class="muted">(×{{ match.multiplier }})</small></h4>
     {% if match.data_fetched %}
     <div style="font-size: 0.75rem; color: var(--text-dim); margin-bottom: 0.5rem;">
         {% if match.fighter_a_record %}{{ match.participant_a }}: {{ match.fighter_a_record }}{% endif %}
@@ -33,17 +68,44 @@
         {% if match.fighter_b_record %}{{ match.participant_b }}: {{ match.fighter_b_record }}{% endif %}
     </div>
     {% endif %}
+    {% if match.odds_a or match.odds_b %}
+    <div style="font-size: 0.75rem; color: var(--text-dim); margin-bottom: 0.5rem;">
+        Odds: {{ '%.2f'|format(match.odds_a) if match.odds_a else '—' }} / {{ '%.2f'|format(match.odds_b) if match.odds_b else '—' }}
+        {% if match.odds_source %}<span class="muted">({{ match.odds_source }})</span>{% endif %}
+    </div>
+    {% endif %}
     <details>
         <summary>Edit Match</summary>
         <form method="post" action="{{ url_for('edit_match', pool_id=pool.id, match_id=match.id) }}" class="inline-form" style="margin-top: 0.75rem;">
             <input type="text" name="participant_a" value="{{ match.participant_a }}" placeholder="Fighter A" style="flex:2;">
             <input type="text" name="participant_b" value="{{ match.participant_b }}" placeholder="Fighter B" style="flex:2;">
-            <input type="number" name="points" value="{{ match.points }}" min="1" style="flex:1; max-width: 5rem;">
+            <input type="number" name="multiplier" value="{{ match.multiplier }}" min="1" style="flex:1; max-width: 5rem;" title="Multiplier">
             <button type="submit" class="btn btn-secondary btn-sm">Save</button>
         </form>
         <form method="post" action="{{ url_for('delete_match', pool_id=pool.id, match_id=match.id) }}" style="margin-top: 0.75rem;">
             <button type="submit" class="btn btn-danger btn-sm"
                     onclick="return confirm('Delete this match?')">Delete Match</button>
+        </form>
+    </details>
+    <details>
+        <summary>Odds</summary>
+        <form method="post" action="{{ url_for('update_odds', pool_id=pool.id, match_id=match.id) }}" style="margin-top: 0.75rem;">
+            <div class="inline-form">
+                <div style="flex:1;">
+                    <label>{{ match.participant_a }} odds</label>
+                    <input type="text" name="odds_a" value="{{ '%.2f'|format(match.odds_a) if match.odds_a else '' }}" placeholder="e.g. 1.50" inputmode="decimal">
+                </div>
+                <div style="flex:1;">
+                    <label>{{ match.participant_b }} odds</label>
+                    <input type="text" name="odds_b" value="{{ '%.2f'|format(match.odds_b) if match.odds_b else '' }}" placeholder="e.g. 2.80" inputmode="decimal">
+                </div>
+            </div>
+            <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+                <button type="submit" class="btn btn-secondary btn-sm">Save Odds</button>
+            </div>
+        </form>
+        <form method="post" action="{{ url_for('refetch_odds', pool_id=pool.id, match_id=match.id) }}" style="margin-top: 0.5rem;">
+            <button type="submit" class="btn btn-outline btn-sm">Re-fetch Odds</button>
         </form>
     </details>
     <details>
@@ -91,7 +153,7 @@
         <div class="inline-form">
             <input type="text" name="participant_a" placeholder="Fighter A" required style="flex: 2;">
             <input type="text" name="participant_b" placeholder="Fighter B" required style="flex: 2;">
-            <input type="number" name="points" value="1" min="1" placeholder="Pts" style="flex: 1; max-width: 5rem;">
+            <input type="number" name="multiplier" value="1" min="1" placeholder="×" title="Multiplier" style="flex: 1; max-width: 5rem;">
             <button type="submit" class="btn btn-primary btn-sm">Add</button>
         </div>
     </form>

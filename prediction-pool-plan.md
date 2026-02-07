@@ -26,8 +26,10 @@ A lightweight, mobile-friendly web app where a small group of friends (2–5 peo
 - **Lock**: Once the pool is locked, no more prediction changes
 
 ### Scoring & Results
-- **Point values**: Each match has a point value assigned by whoever created/edited it
-- **Correct prediction** = you earn those points
+- **Multiplier**: Each match has a multiplier (default 1) assigned by whoever created/edited it
+- **Odds**: Each fighter has decimal odds (e.g. 1.50 / 2.80), fetched automatically or entered manually
+- **Correct prediction** = `odds × multiplier` points (picking an underdog pays more)
+- **If no odds set**: falls back to `1 × multiplier` (same as old system)
 - **Final standings**: When the pool is marked finished and all results are entered, display a leaderboard ranked by total points
 - **Winner declaration**: The person at the top of the leaderboard is declared the winner
 

@@ -1,4 +1,6 @@
 import os
+import io
+import csv
 import uuid
 import secrets
 from datetime import datetime
@@ -11,6 +13,7 @@ from flask import (
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from fighter_lookup import lookup_fighter
+from odds_lookup import lookup_odds
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(32))
@@ -46,10 +49,16 @@ class Match(db.Model):
     pool_id = db.Column(db.String(12), db.ForeignKey('pool.id'), nullable=False)
     participant_a = db.Column(db.String(200), nullable=False)
     participant_b = db.Column(db.String(200), nullable=False)
-    points = db.Column(db.Integer, default=1)
+    multiplier = db.Column(db.Integer, default=1)  # renamed from 'points'
     result = db.Column(db.String(10), nullable=True)  # 'a', 'b', 'draw', or None
     order = db.Column(db.Integer, default=0)
     predictions = db.relationship('Prediction', backref='match', cascade='all, delete-orphan')
+
+    # Odds (decimal format, e.g. 1.50, 2.80)
+    odds_a = db.Column(db.Float, nullable=True)   # odds for fighter A winning
+    odds_b = db.Column(db.Float, nullable=True)   # odds for fighter B winning
+    odds_source = db.Column(db.String(100), nullable=True)  # e.g. "The Odds API", "Manual", "CSV"
+    odds_fetched_at = db.Column(db.DateTime, nullable=True)
 
     # Enhanced fighter data
     fighter_a_image = db.Column(db.String(500), nullable=True)
@@ -64,6 +73,19 @@ class Match(db.Model):
 
     data_fetched = db.Column(db.Boolean, default=False)
 
+    def effective_odds_a(self):
+        """Return odds for fighter A, defaulting to 1.0 if not set."""
+        return self.odds_a if self.odds_a else 1.0
+
+    def effective_odds_b(self):
+        """Return odds for fighter B, defaulting to 1.0 if not set."""
+        return self.odds_b if self.odds_b else 1.0
+
+    def potential_score(self, pick):
+        """Calculate potential score for a given pick."""
+        odds = self.effective_odds_a() if pick == 'a' else self.effective_odds_b()
+        return round(odds * self.multiplier, 1)
+
 
 class Participant(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -77,11 +99,16 @@ class Participant(db.Model):
         return check_password_hash(self.pin_hash, pin)
 
     def score(self):
-        total = 0
+        total = 0.0
         for pred in self.predictions:
             if pred.match.result and pred.pick == pred.match.result:
-                total += pred.match.points
-        return total
+                odds = 1.0  # default if no odds
+                if pred.pick == 'a' and pred.match.odds_a:
+                    odds = pred.match.odds_a
+                elif pred.pick == 'b' and pred.match.odds_b:
+                    odds = pred.match.odds_b
+                total += odds * pred.match.multiplier
+        return round(total, 1)
 
 
 class Prediction(db.Model):
@@ -121,6 +148,90 @@ def fetch_fighter_data(match):
     match.fighter_b_flag = data_b.get("nationality_flag")
 
     match.data_fetched = True
+
+
+def fetch_odds_data(match):
+    """Try to auto-fetch odds for a match. Does not overwrite existing manual odds."""
+    if match.odds_source == 'Manual' or match.odds_source == 'CSV':
+        return  # don't overwrite manually entered or CSV-imported odds
+    result = lookup_odds(match.participant_a, match.participant_b)
+    if result:
+        match.odds_a = result['odds_a']
+        match.odds_b = result['odds_b']
+        match.odds_source = result['source']
+        match.odds_fetched_at = datetime.utcnow()
+
+
+def parse_csv_matches(file_content):
+    """
+    Parse a CSV file with match data.
+
+    Required columns: fighter_a, fighter_b
+    Optional columns: multiplier, odds_a, odds_b,
+                      fighter_a_record, fighter_a_nationality,
+                      fighter_b_record, fighter_b_nationality,
+                      fighter_a_image, fighter_b_image
+
+    Returns a list of dicts, one per match.
+    """
+    # Try to detect encoding — handle BOM for Excel-generated CSVs
+    if isinstance(file_content, bytes):
+        for encoding in ('utf-8-sig', 'utf-8', 'latin-1'):
+            try:
+                file_content = file_content.decode(encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+
+    reader = csv.DictReader(io.StringIO(file_content))
+
+    # Normalize header names (strip whitespace, lowercase)
+    if reader.fieldnames:
+        reader.fieldnames = [f.strip().lower().replace(' ', '_') for f in reader.fieldnames]
+
+    matches = []
+    for row in reader:
+        # Skip empty rows
+        fighter_a = row.get('fighter_a', '').strip()
+        fighter_b = row.get('fighter_b', '').strip()
+        if not fighter_a or not fighter_b:
+            continue
+
+        match_data = {
+            'fighter_a': fighter_a,
+            'fighter_b': fighter_b,
+        }
+
+        # Optional: multiplier
+        mult = row.get('multiplier', '').strip()
+        if mult:
+            try:
+                match_data['multiplier'] = max(1, int(mult))
+            except ValueError:
+                match_data['multiplier'] = 1
+        else:
+            match_data['multiplier'] = 1
+
+        # Optional: odds
+        for key in ('odds_a', 'odds_b'):
+            val = row.get(key, '').strip()
+            if val:
+                try:
+                    match_data[key] = round(float(val), 2)
+                except ValueError:
+                    pass
+
+        # Optional: fighter data
+        for key in ('fighter_a_record', 'fighter_a_nationality',
+                     'fighter_b_record', 'fighter_b_nationality',
+                     'fighter_a_image', 'fighter_b_image'):
+            val = row.get(key, '').strip()
+            if val:
+                match_data[key] = val
+
+        matches.append(match_data)
+
+    return matches
 
 
 def current_participant(pool_id):
@@ -306,31 +417,35 @@ def add_match(pool_id):
     pool = get_pool_or_404(pool_id)
     a = request.form.get('participant_a', '').strip()
     b = request.form.get('participant_b', '').strip()
-    points = request.form.get('points', '1').strip()
+    multiplier = request.form.get('multiplier', '1').strip()
 
     if not a or not b:
         flash('Both participant names are required.', 'error')
         return redirect(url_for('pool_settings', pool_id=pool_id))
 
     try:
-        points = max(1, int(points))
+        multiplier = max(1, int(multiplier))
     except ValueError:
-        points = 1
+        multiplier = 1
 
     order = len(pool.matches)
     match = Match(pool_id=pool_id, participant_a=a, participant_b=b,
-                  points=points, order=order)
+                  multiplier=multiplier, order=order)
     db.session.add(match)
     db.session.flush()  # get match.id before fetching
 
-    # Auto-fetch fighter data
+    # Auto-fetch fighter data + odds
     try:
         fetch_fighter_data(match)
     except Exception:
         pass  # graceful fallback — match works without fighter data
+    try:
+        fetch_odds_data(match)
+    except Exception:
+        pass  # graceful fallback — match works without odds
 
     db.session.commit()
-    flash(f'Match added: {a} vs {b} ({points} pts)', 'success')
+    flash(f'Match added: {a} vs {b} (×{multiplier})', 'success')
     return redirect(url_for('pool_settings', pool_id=pool_id))
 
 
@@ -354,7 +469,7 @@ def edit_match(pool_id, match_id):
 
     a = request.form.get('participant_a', '').strip()
     b = request.form.get('participant_b', '').strip()
-    points = request.form.get('points', '1').strip()
+    multiplier = request.form.get('multiplier', '1').strip()
 
     names_changed = False
     if a and a != match.participant_a:
@@ -364,14 +479,18 @@ def edit_match(pool_id, match_id):
         match.participant_b = b
         names_changed = True
     try:
-        match.points = max(1, int(points))
+        match.multiplier = max(1, int(multiplier))
     except ValueError:
         pass
 
-    # Re-fetch fighter data if names changed
+    # Re-fetch fighter data + odds if names changed
     if names_changed:
         try:
             fetch_fighter_data(match)
+        except Exception:
+            pass
+        try:
+            fetch_odds_data(match)
         except Exception:
             pass
 
@@ -418,6 +537,176 @@ def refetch_fighter_data(pool_id, match_id):
         flash('Could not fetch fighter data.', 'error')
 
     return redirect(url_for('pool_settings', pool_id=pool_id))
+
+
+# ---------------------------------------------------------------------------
+# Routes — Odds (manual entry + re-fetch)
+# ---------------------------------------------------------------------------
+
+@app.route('/pool/<pool_id>/match/<int:match_id>/odds', methods=['POST'])
+def update_odds(pool_id, match_id):
+    pool = get_pool_or_404(pool_id)
+    match = db.session.get(Match, match_id)
+    if not match or match.pool_id != pool_id:
+        abort(404)
+
+    odds_a = request.form.get('odds_a', '').strip()
+    odds_b = request.form.get('odds_b', '').strip()
+
+    try:
+        match.odds_a = round(float(odds_a), 2) if odds_a else None
+    except ValueError:
+        match.odds_a = None
+    try:
+        match.odds_b = round(float(odds_b), 2) if odds_b else None
+    except ValueError:
+        match.odds_b = None
+
+    if match.odds_a or match.odds_b:
+        match.odds_source = 'Manual'
+        match.odds_fetched_at = datetime.utcnow()
+    else:
+        match.odds_source = None
+        match.odds_fetched_at = None
+
+    db.session.commit()
+    flash('Odds updated.', 'success')
+    return redirect(url_for('pool_settings', pool_id=pool_id))
+
+
+@app.route('/pool/<pool_id>/match/<int:match_id>/refetch-odds', methods=['POST'])
+def refetch_odds(pool_id, match_id):
+    pool = get_pool_or_404(pool_id)
+    match = db.session.get(Match, match_id)
+    if not match or match.pool_id != pool_id:
+        abort(404)
+
+    # Temporarily clear source so fetch_odds_data doesn't skip
+    old_source = match.odds_source
+    match.odds_source = None
+    try:
+        fetch_odds_data(match)
+        if match.odds_a and match.odds_b:
+            db.session.commit()
+            flash('Odds refreshed.', 'success')
+        else:
+            match.odds_source = old_source  # restore
+            db.session.commit()
+            flash('No odds found — try manual entry.', 'error')
+    except Exception:
+        match.odds_source = old_source
+        db.session.commit()
+        flash('Could not fetch odds.', 'error')
+
+    return redirect(url_for('pool_settings', pool_id=pool_id))
+
+
+# ---------------------------------------------------------------------------
+# Routes — CSV Upload (bulk import matches)
+# ---------------------------------------------------------------------------
+
+@app.route('/pool/<pool_id>/upload-csv', methods=['POST'])
+def upload_csv(pool_id):
+    pool = get_pool_or_404(pool_id)
+
+    file = request.files.get('csv_file')
+    if not file or not file.filename:
+        flash('Please select a CSV file.', 'error')
+        return redirect(url_for('pool_settings', pool_id=pool_id))
+
+    if not file.filename.lower().endswith('.csv'):
+        flash('File must be a .csv file.', 'error')
+        return redirect(url_for('pool_settings', pool_id=pool_id))
+
+    try:
+        content = file.read()
+        matches_data = parse_csv_matches(content)
+    except Exception as e:
+        flash(f'Error reading CSV: {e}', 'error')
+        return redirect(url_for('pool_settings', pool_id=pool_id))
+
+    if not matches_data:
+        flash('No valid matches found in CSV. Required columns: fighter_a, fighter_b', 'error')
+        return redirect(url_for('pool_settings', pool_id=pool_id))
+
+    added = 0
+    base_order = len(pool.matches)
+    for i, md in enumerate(matches_data):
+        match = Match(
+            pool_id=pool_id,
+            participant_a=md['fighter_a'],
+            participant_b=md['fighter_b'],
+            multiplier=md.get('multiplier', 1),
+            order=base_order + i,
+        )
+
+        # Set odds from CSV if provided
+        if 'odds_a' in md:
+            match.odds_a = md['odds_a']
+        if 'odds_b' in md:
+            match.odds_b = md['odds_b']
+        if match.odds_a or match.odds_b:
+            match.odds_source = 'CSV'
+            match.odds_fetched_at = datetime.utcnow()
+
+        # Set fighter data from CSV if provided
+        for field in ('fighter_a_record', 'fighter_a_nationality',
+                      'fighter_b_record', 'fighter_b_nationality',
+                      'fighter_a_image', 'fighter_b_image'):
+            if field in md:
+                setattr(match, field, md[field])
+
+        db.session.add(match)
+        db.session.flush()
+
+        # Auto-fetch fighter data if not provided in CSV
+        if not match.fighter_a_record and not match.fighter_b_record:
+            try:
+                fetch_fighter_data(match)
+            except Exception:
+                pass
+
+        # Auto-fetch odds if not provided in CSV
+        if not match.odds_a and not match.odds_b:
+            try:
+                fetch_odds_data(match)
+            except Exception:
+                pass
+
+        added += 1
+
+    db.session.commit()
+    flash(f'{added} match{"es" if added != 1 else ""} imported from CSV.', 'success')
+    return redirect(url_for('pool_settings', pool_id=pool_id))
+
+
+@app.route('/pool/<pool_id>/csv-template')
+def csv_template(pool_id):
+    """Download an example CSV template."""
+    pool = get_pool_or_404(pool_id)
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        'fighter_a', 'fighter_b', 'multiplier',
+        'odds_a', 'odds_b',
+        'fighter_a_record', 'fighter_a_nationality',
+        'fighter_b_record', 'fighter_b_nationality',
+    ])
+    # Example row
+    writer.writerow([
+        'Rico Verhoeven', 'Jamal Ben Saddik', '2',
+        '1.45', '2.90',
+        '77-10-0', 'Netherlands',
+        '38-11-0', 'Morocco',
+    ])
+
+    from flask import Response
+    return Response(
+        output.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': 'attachment; filename=matches_template.csv'}
+    )
 
 
 # ---------------------------------------------------------------------------

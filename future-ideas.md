@@ -4,11 +4,21 @@ Ideas for future versions, collected during initial planning. Not in scope for v
 
 ---
 
-## Enhanced Match Data
-- Collect data and images on specific fights and participants
-- Pull fight history for each fighter (record, weight class, recent results)
-- Display current odds on each fight (from public sources)
-- Show fighter stats alongside prediction interface
+## Enhanced Match Data ✅ DONE
+- ~~Collect data and images on specific fights and participants~~
+- ~~Pull fight history for each fighter (record, weight class, recent results)~~
+- ~~Show fighter stats alongside prediction interface~~
+- Auto-fetched from Wikipedia/Wikidata on match creation
+- Manual override available in settings
+- Display current odds on each fight → see **Odds & Scoring** below
+
+## Odds & Scoring ✅ DONE
+- ~~Fetch betting odds from external sources (hybrid: auto + manual fallback)~~
+- ~~Display decimal (European) odds on each match card~~
+- ~~New scoring: **score = odds × multiplier** (replaces old fixed-point system)~~
+- ~~Rename "points" to "multiplier" throughout the app~~
+- Auto-fetch via The Odds API (set `ODDS_API_KEY` env var), manual entry fallback
+- CSV upload for bulk-importing matches with odds and fighter data
 
 ## Automatic Result Collection
 - After each fight is over, automatically fetch and enter the result

@@ -20,7 +20,7 @@
 <div class="winner-banner">
     <div class="trophy">🏆</div>
     <h2>{{ leaderboard[0].display_name }} wins!</h2>
-    <p>{{ leaderboard[0].score() }} points</p>
+    <p>{{ leaderboard[0].score() }} pts</p>
 </div>
 {% endif %}
 
@@ -70,7 +70,7 @@
 <div class="match-card {% if match.result %}has-result{% endif %}">
     <div class="match-header">
         <span class="match-label">Match {{ loop.index }}</span>
-        <span class="match-points">{{ match.points }} pt{{ 's' if match.points != 1 }}</span>
+        <span class="match-points">×{{ match.multiplier }}</span>
     </div>
     <div class="fighters">
         {% set my_pick = my_predictions.get(match.id) %}
@@ -84,6 +84,9 @@
                         <img src="{{ match.fighter_a_image }}" alt="{{ match.participant_a }}" class="fighter-photo">
                     {% endif %}
                     <span>{{ match.fighter_a_flag }} {{ match.participant_a }}</span>
+                    {% if match.odds_a %}
+                        <span class="odds-badge">{{ '%.2f'|format(match.odds_a) }}</span>
+                    {% endif %}
                     {% if match.fighter_a_record %}
                         <span class="fighter-meta"><span class="record">{{ match.fighter_a_record }}</span></span>
                     {% endif %}
@@ -98,6 +101,9 @@
                         <img src="{{ match.fighter_a_image }}" alt="{{ match.participant_a }}" class="fighter-photo">
                     {% endif %}
                     <span>{{ match.fighter_a_flag }} {{ match.participant_a }}</span>
+                    {% if match.odds_a %}
+                        <span class="odds-badge">{{ '%.2f'|format(match.odds_a) }}</span>
+                    {% endif %}
                     {% if match.fighter_a_record %}
                         <span class="fighter-meta"><span class="record">{{ match.fighter_a_record }}</span></span>
                     {% endif %}
@@ -116,6 +122,9 @@
                         <img src="{{ match.fighter_b_image }}" alt="{{ match.participant_b }}" class="fighter-photo">
                     {% endif %}
                     <span>{{ match.fighter_b_flag }} {{ match.participant_b }}</span>
+                    {% if match.odds_b %}
+                        <span class="odds-badge">{{ '%.2f'|format(match.odds_b) }}</span>
+                    {% endif %}
                     {% if match.fighter_b_record %}
                         <span class="fighter-meta"><span class="record">{{ match.fighter_b_record }}</span></span>
                     {% endif %}
@@ -130,6 +139,9 @@
                         <img src="{{ match.fighter_b_image }}" alt="{{ match.participant_b }}" class="fighter-photo">
                     {% endif %}
                     <span>{{ match.fighter_b_flag }} {{ match.participant_b }}</span>
+                    {% if match.odds_b %}
+                        <span class="odds-badge">{{ '%.2f'|format(match.odds_b) }}</span>
+                    {% endif %}
                     {% if match.fighter_b_record %}
                         <span class="fighter-meta"><span class="record">{{ match.fighter_b_record }}</span></span>
                     {% endif %}
@@ -141,6 +153,15 @@
             <input type="hidden" name="match_{{ match.id }}" id="pick_{{ match.id }}" value="{{ my_pick or '' }}">
         {% endif %}
     </div>
+
+    {# Potential score display #}
+    {% if match.odds_a or match.odds_b %}
+    <div class="potential-score">
+        {% if match.odds_a %}{{ match.participant_a }}: {{ match.potential_score('a') }} pts{% endif %}
+        {% if match.odds_a and match.odds_b %} · {% endif %}
+        {% if match.odds_b %}{{ match.participant_b }}: {{ match.potential_score('b') }} pts{% endif %}
+    </div>
+    {% endif %}
 
     {# Prediction counts #}
     {% set summary = pred_summary.get(match.id, {'a': 0, 'b': 0}) %}
