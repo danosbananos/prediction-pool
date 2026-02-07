@@ -5,22 +5,24 @@
 {% block subheader %}Predict fight outcomes &amp; compete with friends{% endblock %}
 
 {% block content %}
-<section>
-    <h3>Create a New Pool</h3>
+<div class="card" style="margin-top: 1.5rem;">
+    <div class="section-title" style="margin-top: 0;">Create a New Pool</div>
     <form method="post" action="{{ url_for('create_pool') }}">
-        <input type="text" name="name" placeholder="Pool name (e.g. Glory Heavyweight Finals 2026)" required autofocus>
-        <button type="submit">Create Pool</button>
+        <label for="pool-name">Pool Name</label>
+        <input type="text" name="name" id="pool-name" placeholder="e.g. Glory Heavyweight Finals 2026" required autofocus>
+        <button type="submit" class="btn btn-primary btn-full mt-2">Create Pool</button>
     </form>
-</section>
+</div>
 
-<section>
-    <h3>Join an Existing Pool</h3>
-    <p><small class="muted">Paste the pool link you received from a friend, or enter the pool code.</small></p>
+<div class="card">
+    <div class="section-title" style="margin-top: 0;">Join an Existing Pool</div>
+    <p style="margin-bottom: 0.75rem;"><small class="muted">Paste the pool link you received from a friend, or enter the pool code.</small></p>
     <form onsubmit="goToPool(event)">
+        <label for="pool-link">Pool Link or Code</label>
         <input type="text" id="pool-link" placeholder="Pool link or code" required>
-        <button type="submit" class="secondary">Go to Pool</button>
+        <button type="submit" class="btn btn-secondary btn-full mt-2">Go to Pool</button>
     </form>
-</section>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -28,7 +30,6 @@
 function goToPool(e) {
     e.preventDefault();
     const val = document.getElementById('pool-link').value.trim();
-    // If it's a full URL, extract the path; otherwise treat as pool ID
     if (val.includes('/pool/')) {
         window.location.href = val;
     } else {
