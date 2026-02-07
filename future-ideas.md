@@ -55,6 +55,13 @@ Ideas for future versions, collected during initial planning. Not in scope for v
 - Share results to social media
 - Invite friends via WhatsApp/iMessage deep links
 
+## Bugfixes & Improvements
+- Add a favicon
+- Fix "None" appearing before fighter names
+- Fix flags not displaying at fighter names (possibly related to the "None" issue)
+- Review the fetch fighter data feature — currently not producing results
+- Investigate deployment without re-creating the database (likely cause of lost pool data on last deploy)
+
 ## Data & Analytics
 - Prediction accuracy stats per user over time
 - Most/least predictable fighters
