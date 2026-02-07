@@ -25,9 +25,16 @@
 
 {% for match in pool.matches %}
 <div class="match-settings-card">
-    <h4>{{ match.participant_a }} vs {{ match.participant_b }} <small class="muted">({{ match.points }} pts)</small></h4>
+    <h4>{{ match.fighter_a_flag }} {{ match.participant_a }} vs {{ match.participant_b }} {{ match.fighter_b_flag }} <small class="muted">({{ match.points }} pts)</small></h4>
+    {% if match.data_fetched %}
+    <div style="font-size: 0.75rem; color: var(--text-dim); margin-bottom: 0.5rem;">
+        {% if match.fighter_a_record %}{{ match.participant_a }}: {{ match.fighter_a_record }}{% endif %}
+        {% if match.fighter_a_record and match.fighter_b_record %} · {% endif %}
+        {% if match.fighter_b_record %}{{ match.participant_b }}: {{ match.fighter_b_record }}{% endif %}
+    </div>
+    {% endif %}
     <details>
-        <summary>Edit</summary>
+        <summary>Edit Match</summary>
         <form method="post" action="{{ url_for('edit_match', pool_id=pool.id, match_id=match.id) }}" class="inline-form" style="margin-top: 0.75rem;">
             <input type="text" name="participant_a" value="{{ match.participant_a }}" placeholder="Fighter A" style="flex:2;">
             <input type="text" name="participant_b" value="{{ match.participant_b }}" placeholder="Fighter B" style="flex:2;">
@@ -37,6 +44,41 @@
         <form method="post" action="{{ url_for('delete_match', pool_id=pool.id, match_id=match.id) }}" style="margin-top: 0.75rem;">
             <button type="submit" class="btn btn-danger btn-sm"
                     onclick="return confirm('Delete this match?')">Delete Match</button>
+        </form>
+    </details>
+    <details>
+        <summary>Fighter Data</summary>
+        <form method="post" action="{{ url_for('update_fighter_data', pool_id=pool.id, match_id=match.id) }}" style="margin-top: 0.75rem;">
+            <label>{{ match.participant_a }} — Image URL</label>
+            <input type="text" name="fighter_a_image" value="{{ match.fighter_a_image or '' }}" placeholder="https://...">
+            <div class="inline-form">
+                <div style="flex:1;">
+                    <label>Record</label>
+                    <input type="text" name="fighter_a_record" value="{{ match.fighter_a_record or '' }}" placeholder="e.g. 45-12-0">
+                </div>
+                <div style="flex:1;">
+                    <label>Nationality</label>
+                    <input type="text" name="fighter_a_nationality" value="{{ match.fighter_a_nationality or '' }}" placeholder="e.g. Netherlands">
+                </div>
+            </div>
+            <label style="margin-top: 0.75rem;">{{ match.participant_b }} — Image URL</label>
+            <input type="text" name="fighter_b_image" value="{{ match.fighter_b_image or '' }}" placeholder="https://...">
+            <div class="inline-form">
+                <div style="flex:1;">
+                    <label>Record</label>
+                    <input type="text" name="fighter_b_record" value="{{ match.fighter_b_record or '' }}" placeholder="e.g. 38-11-0">
+                </div>
+                <div style="flex:1;">
+                    <label>Nationality</label>
+                    <input type="text" name="fighter_b_nationality" value="{{ match.fighter_b_nationality or '' }}" placeholder="e.g. Morocco">
+                </div>
+            </div>
+            <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+                <button type="submit" class="btn btn-secondary btn-sm">Save Fighter Data</button>
+            </div>
+        </form>
+        <form method="post" action="{{ url_for('refetch_fighter_data', pool_id=pool.id, match_id=match.id) }}" style="margin-top: 0.5rem;">
+            <button type="submit" class="btn btn-outline btn-sm">Re-fetch from Wikipedia</button>
         </form>
     </details>
 </div>

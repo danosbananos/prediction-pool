@@ -10,6 +10,7 @@ from flask import (
 )
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
+from fighter_lookup import lookup_fighter
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(32))
@@ -49,6 +50,19 @@ class Match(db.Model):
     result = db.Column(db.String(10), nullable=True)  # 'a', 'b', 'draw', or None
     order = db.Column(db.Integer, default=0)
     predictions = db.relationship('Prediction', backref='match', cascade='all, delete-orphan')
+
+    # Enhanced fighter data
+    fighter_a_image = db.Column(db.String(500), nullable=True)
+    fighter_a_record = db.Column(db.String(50), nullable=True)
+    fighter_a_nationality = db.Column(db.String(100), nullable=True)
+    fighter_a_flag = db.Column(db.String(10), nullable=True)
+
+    fighter_b_image = db.Column(db.String(500), nullable=True)
+    fighter_b_record = db.Column(db.String(50), nullable=True)
+    fighter_b_nationality = db.Column(db.String(100), nullable=True)
+    fighter_b_flag = db.Column(db.String(10), nullable=True)
+
+    data_fetched = db.Column(db.Boolean, default=False)
 
 
 class Participant(db.Model):
@@ -90,6 +104,23 @@ def get_pool_or_404(pool_id):
     if not pool:
         abort(404)
     return pool
+
+
+def fetch_fighter_data(match):
+    """Fetch and store fighter data for both fighters in a match."""
+    data_a = lookup_fighter(match.participant_a)
+    match.fighter_a_image = data_a.get("image_url")
+    match.fighter_a_record = data_a.get("record")
+    match.fighter_a_nationality = data_a.get("nationality")
+    match.fighter_a_flag = data_a.get("nationality_flag")
+
+    data_b = lookup_fighter(match.participant_b)
+    match.fighter_b_image = data_b.get("image_url")
+    match.fighter_b_record = data_b.get("record")
+    match.fighter_b_nationality = data_b.get("nationality")
+    match.fighter_b_flag = data_b.get("nationality_flag")
+
+    match.data_fetched = True
 
 
 def current_participant(pool_id):
@@ -290,6 +321,14 @@ def add_match(pool_id):
     match = Match(pool_id=pool_id, participant_a=a, participant_b=b,
                   points=points, order=order)
     db.session.add(match)
+    db.session.flush()  # get match.id before fetching
+
+    # Auto-fetch fighter data
+    try:
+        fetch_fighter_data(match)
+    except Exception:
+        pass  # graceful fallback — match works without fighter data
+
     db.session.commit()
     flash(f'Match added: {a} vs {b} ({points} pts)', 'success')
     return redirect(url_for('pool_settings', pool_id=pool_id))
@@ -317,17 +356,67 @@ def edit_match(pool_id, match_id):
     b = request.form.get('participant_b', '').strip()
     points = request.form.get('points', '1').strip()
 
-    if a:
+    names_changed = False
+    if a and a != match.participant_a:
         match.participant_a = a
-    if b:
+        names_changed = True
+    if b and b != match.participant_b:
         match.participant_b = b
+        names_changed = True
     try:
         match.points = max(1, int(points))
     except ValueError:
         pass
 
+    # Re-fetch fighter data if names changed
+    if names_changed:
+        try:
+            fetch_fighter_data(match)
+        except Exception:
+            pass
+
     db.session.commit()
     flash('Match updated.', 'success')
+    return redirect(url_for('pool_settings', pool_id=pool_id))
+
+
+# ---------------------------------------------------------------------------
+# Routes — Fighter Data (manual override + re-fetch)
+# ---------------------------------------------------------------------------
+
+@app.route('/pool/<pool_id>/match/<int:match_id>/fighter-data', methods=['POST'])
+def update_fighter_data(pool_id, match_id):
+    pool = get_pool_or_404(pool_id)
+    match = db.session.get(Match, match_id)
+    if not match or match.pool_id != pool_id:
+        abort(404)
+
+    match.fighter_a_image = request.form.get('fighter_a_image', '').strip() or None
+    match.fighter_a_record = request.form.get('fighter_a_record', '').strip() or None
+    match.fighter_a_nationality = request.form.get('fighter_a_nationality', '').strip() or None
+    match.fighter_b_image = request.form.get('fighter_b_image', '').strip() or None
+    match.fighter_b_record = request.form.get('fighter_b_record', '').strip() or None
+    match.fighter_b_nationality = request.form.get('fighter_b_nationality', '').strip() or None
+
+    db.session.commit()
+    flash('Fighter data updated.', 'success')
+    return redirect(url_for('pool_settings', pool_id=pool_id))
+
+
+@app.route('/pool/<pool_id>/match/<int:match_id>/refetch', methods=['POST'])
+def refetch_fighter_data(pool_id, match_id):
+    pool = get_pool_or_404(pool_id)
+    match = db.session.get(Match, match_id)
+    if not match or match.pool_id != pool_id:
+        abort(404)
+
+    try:
+        fetch_fighter_data(match)
+        db.session.commit()
+        flash('Fighter data refreshed.', 'success')
+    except Exception:
+        flash('Could not fetch fighter data.', 'error')
+
     return redirect(url_for('pool_settings', pool_id=pool_id))
 
 

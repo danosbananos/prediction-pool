@@ -801,6 +801,69 @@
             border-radius: 3px;
         }
 
+        /* ── Fighter Info (Enhanced Match Data) ── */
+        .fighter-cell {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .fighter-photo {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid var(--border-light);
+            background: var(--bg-surface);
+            transition: border-color 0.2s;
+        }
+
+        .fighter-photo-placeholder {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            background: var(--bg-surface);
+            border: 2px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-dim);
+            font-size: 1.2rem;
+        }
+
+        .fighter-btn.selected .fighter-photo {
+            border-color: var(--crimson);
+        }
+
+        .fighter-btn.correct .fighter-photo {
+            border-color: var(--green);
+        }
+
+        .fighter-btn.winner-highlight .fighter-photo {
+            border-color: var(--gold);
+        }
+
+        .fighter-meta {
+            font-size: 0.68rem;
+            color: var(--text-dim);
+            text-align: center;
+            line-height: 1.3;
+            text-transform: none;
+            letter-spacing: 0;
+            font-family: var(--font-body);
+            font-weight: 400;
+        }
+
+        .fighter-meta .record {
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+
+        .fighter-meta .flag {
+            font-size: 0.8rem;
+        }
+
         /* ── Utility ── */
         .ml-auto { margin-left: auto; }
         .mt-1 { margin-top: 0.5rem; }
