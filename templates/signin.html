@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}Sign In — {{ pool.name }}{% endblock %}
+{% block header %}Sign Back In{% endblock %}
+{% block subheader %}{{ pool.name }}{% endblock %}
+
+{% block content %}
+<form method="post">
+    <label for="name">Your Name</label>
+    <input type="text" name="name" id="name" placeholder="Exactly as you entered it" required autofocus>
+
+    <label for="pin">Your 4-digit PIN</label>
+    <input type="password" name="pin" id="pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4"
+           placeholder="Your PIN" required>
+
+    <button type="submit" style="margin-top: 1rem; width: 100%;">Sign In</button>
+</form>
+
+<p style="text-align: center; margin-top: 1rem;">
+    <small>New here? <a href="{{ url_for('join_pool', pool_id=pool.id) }}">Join the pool</a></small>
+</p>
+{% endblock %}

@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+
+{% block title %}{{ pool.name }}{% endblock %}
+{% block header %}{{ pool.name }}{% endblock %}
+{% block subheader %}
+    <span class="status-badge status-{{ pool.status }}">{{ pool.status }}</span>
+    {% if pool.description %}<br>{{ pool.description }}{% endif %}
+{% endblock %}
+
+{% block content %}
+
+{# --- Share link --- #}
+<div class="pool-link-box">
+    <input type="text" id="pool-url" value="{{ request.url_root }}pool/{{ pool.id }}" readonly onclick="this.select()">
+    <button class="secondary outline" onclick="copyLink()">Copy</button>
+</div>
+
+{# --- Winner banner --- #}
+{% if pool.status == 'finished' and leaderboard %}
+<div class="winner-banner">
+    <div class="trophy">🏆</div>
+    <h2>{{ leaderboard[0].display_name }} wins!</h2>
+    <p>{{ leaderboard[0].score() }} points</p>
+</div>
+{% endif %}
+
+{# --- Action bar --- #}
+<div class="actions-bar">
+    {% if not me %}
+        <a href="{{ url_for('join_pool', pool_id=pool.id) }}" role="button">Join Pool</a>
+        <a href="{{ url_for('signin', pool_id=pool.id) }}" role="button" class="secondary outline">Sign Back In</a>
+    {% else %}
+        <small style="align-self: center;">Signed in as <strong>{{ me.display_name }}</strong></small>
+    {% endif %}
+
+    <a href="{{ url_for('pool_settings', pool_id=pool.id) }}" role="button" class="secondary outline" style="margin-left: auto;">Settings</a>
+</div>
+
+{# --- Pool status controls --- #}
+<div class="actions-bar">
+    {% if pool.status == 'open' %}
+        <form method="post" action="{{ url_for('lock_pool', pool_id=pool.id) }}">
+            <button class="contrast" onclick="return confirm('Lock the pool? No more predictions will be allowed.')">Lock Predictions</button>
+        </form>
+    {% elif pool.status == 'locked' %}
+        <form method="post" action="{{ url_for('reopen_pool', pool_id=pool.id) }}">
+            <button class="secondary">Reopen for Predictions</button>
+        </form>
+        {% if pool.all_results_entered %}
+        <form method="post" action="{{ url_for('finish_pool', pool_id=pool.id) }}">
+            <button onclick="return confirm('Finish the pool and declare a winner?')">Finish &amp; Declare Winner</button>
+        </form>
+        {% endif %}
+    {% elif pool.status == 'finished' %}
+        <form method="post" action="{{ url_for('reopen_pool', pool_id=pool.id) }}">
+            <button class="secondary outline">Reopen Pool</button>
+        </form>
+    {% endif %}
+</div>
+
+{# --- Matches + Predictions --- #}
+{% if pool.matches %}
+<div class="section-title">Matches</div>
+
+{% if me and pool.status == 'open' %}
+<form method="post" action="{{ url_for('save_predictions', pool_id=pool.id) }}">
+{% endif %}
+
+{% for match in pool.matches %}
+<div class="match-card {% if match.result %}has-result{% endif %}">
+    <div class="match-header">
+        <span>Match {{ loop.index }}</span>
+        <span>{{ match.points }} pt{{ 's' if match.points != 1 }}</span>
+    </div>
+    <div class="fighters">
+        {% set my_pick = my_predictions.get(match.id) %}
+
+        {# Fighter A button #}
+        {% if me and pool.status == 'open' %}
+            <button type="button" class="fighter-btn {% if my_pick == 'a' %}selected{% endif %}"
+                    onclick="togglePick(this, '{{ match.id }}', 'a')">
+                {{ match.participant_a }}
+            </button>
+        {% else %}
+            <div class="fighter-btn
+                {% if match.result == 'a' %}winner-highlight{% endif %}
+                {% if my_pick == 'a' and match.result == 'a' %}correct{% elif my_pick == 'a' and match.result and match.result != 'a' %}wrong{% elif my_pick == 'a' %}selected{% endif %}">
+                {{ match.participant_a }}
+            </div>
+        {% endif %}
+
+        <span class="vs">VS</span>
+
+        {# Fighter B button #}
+        {% if me and pool.status == 'open' %}
+            <button type="button" class="fighter-btn {% if my_pick == 'b' %}selected{% endif %}"
+                    onclick="togglePick(this, '{{ match.id }}', 'b')">
+                {{ match.participant_b }}
+            </button>
+        {% else %}
+            <div class="fighter-btn
+                {% if match.result == 'b' %}winner-highlight{% endif %}
+                {% if my_pick == 'b' and match.result == 'b' %}correct{% elif my_pick == 'b' and match.result and match.result != 'b' %}wrong{% elif my_pick == 'b' %}selected{% endif %}">
+                {{ match.participant_b }}
+            </div>
+        {% endif %}
+
+        {% if me and pool.status == 'open' %}
+            <input type="hidden" name="match_{{ match.id }}" id="pick_{{ match.id }}" value="{{ my_pick or '' }}">
+        {% endif %}
+    </div>
+
+    {# Prediction counts #}
+    {% set summary = pred_summary.get(match.id, {'a': 0, 'b': 0}) %}
+    {% if pool.participants|length > 0 %}
+    <div class="picks-detail">
+        {{ summary.a }} picked {{ match.participant_a }} · {{ summary.b }} picked {{ match.participant_b }}
+    </div>
+    {% endif %}
+
+    {# Result display or entry #}
+    {% if match.result %}
+        <div class="picks-detail">
+            <strong>Winner:
+            {% if match.result == 'a' %}{{ match.participant_a }}
+            {% elif match.result == 'b' %}{{ match.participant_b }}
+            {% else %}Draw{% endif %}</strong>
+            · <form method="post" action="{{ url_for('clear_result', pool_id=pool.id, match_id=match.id) }}" style="display:inline;">
+                <button type="submit" class="secondary outline" style="padding:0.2rem 0.5rem; font-size:0.75rem; margin:0;">Clear</button>
+            </form>
+        </div>
+    {% elif pool.status in ('locked', 'finished') %}
+        <div class="result-btns">
+            <form method="post" action="{{ url_for('enter_result', pool_id=pool.id, match_id=match.id) }}" style="display:contents;">
+                <input type="hidden" name="result" value="a">
+                <button type="submit" class="secondary outline">{{ match.participant_a }} wins</button>
+            </form>
+            <form method="post" action="{{ url_for('enter_result', pool_id=pool.id, match_id=match.id) }}" style="display:contents;">
+                <input type="hidden" name="result" value="b">
+                <button type="submit" class="secondary outline">{{ match.participant_b }} wins</button>
+            </form>
+        </div>
+    {% endif %}
+</div>
+{% endfor %}
+
+{% if me and pool.status == 'open' %}
+    <button type="submit" style="width: 100%; margin-top: 0.5rem;">Save My Predictions</button>
+</form>
+{% endif %}
+
+{% else %}
+<p>No matches yet. <a href="{{ url_for('pool_settings', pool_id=pool.id) }}">Add some matches</a> to get started.</p>
+{% endif %}
+
+{# --- All picks (visible when locked/finished) --- #}
+{% if pool.status in ('locked', 'finished') and pool.participants and pool.matches %}
+<div class="section-title">Everyone's Picks</div>
+<div style="overflow-x: auto;">
+<table>
+    <thead>
+        <tr>
+            <th>Match</th>
+            {% for p in leaderboard %}
+            <th style="text-align:center;">{{ p.display_name }}</th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for match in pool.matches %}
+        <tr>
+            <td style="font-size:0.85rem;">{{ match.participant_a }} vs {{ match.participant_b }}</td>
+            {% for p in leaderboard %}
+                {% set pick = all_predictions.get(p.id, {}).get(match.id) %}
+                <td style="text-align:center; font-size:0.85rem;">
+                    {% if pick == 'a' %}
+                        <span {% if match.result == 'a' %}style="color:#28a745;font-weight:bold;"{% elif match.result and match.result != 'a' %}style="color:#dc3545;text-decoration:line-through;"{% endif %}>
+                            {{ match.participant_a }}
+                        </span>
+                    {% elif pick == 'b' %}
+                        <span {% if match.result == 'b' %}style="color:#28a745;font-weight:bold;"{% elif match.result and match.result != 'b' %}style="color:#dc3545;text-decoration:line-through;"{% endif %}>
+                            {{ match.participant_b }}
+                        </span>
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endif %}
+
+{# --- Leaderboard --- #}
+{% if pool.participants %}
+<div class="section-title">Leaderboard</div>
+<div class="leaderboard">
+    {% for p in leaderboard %}
+    <div class="leaderboard-entry">
+        <span class="leaderboard-rank">
+            {% if loop.index == 1 and pool.status == 'finished' %}🏆{% else %}#{{ loop.index }}{% endif %}
+        </span>
+        <span class="leaderboard-name">
+            {{ p.display_name }}
+            {% if me and p.id == me.id %}<span class="you">(you)</span>{% endif %}
+        </span>
+        <span class="leaderboard-score">{{ p.score() }} pts</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function togglePick(btn, matchId, pick) {
+    const hidden = document.getElementById('pick_' + matchId);
+    const parent = btn.closest('.fighters');
+    parent.querySelectorAll('.fighter-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    hidden.value = pick;
+}
+
+function copyLink() {
+    const input = document.getElementById('pool-url');
+    input.select();
+    navigator.clipboard.writeText(input.value).then(() => {
+        const btn = input.nextElementSibling;
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = 'Copy', 2000);
+    });
+}
+</script>
+{% endblock %}

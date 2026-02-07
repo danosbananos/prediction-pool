@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Settings — {{ pool.name }}{% endblock %}
+{% block header %}Pool Settings{% endblock %}
+{% block subheader %}{{ pool.name }}{% endblock %}
+
+{% block content %}
+
+<a href="{{ url_for('pool_view', pool_id=pool.id) }}" style="font-size: 0.9rem;">&larr; Back to pool</a>
+
+{# --- Edit pool info --- #}
+<div class="section-title">Pool Info</div>
+<form method="post" action="{{ url_for('edit_pool', pool_id=pool.id) }}">
+    <label for="name">Pool Name</label>
+    <input type="text" name="name" id="name" value="{{ pool.name }}" required>
+    <label for="description">Description <small class="muted">(optional)</small></label>
+    <input type="text" name="description" id="description" value="{{ pool.description or '' }}" placeholder="e.g. Glory Heavyweight Tournament">
+    <button type="submit" class="secondary">Update Pool Info</button>
+</form>
+
+{# --- Matches --- #}
+<div class="section-title">Matches ({{ pool.matches|length }})</div>
+
+{% for match in pool.matches %}
+<div class="match-settings-card">
+    <h4>{{ match.participant_a }} vs {{ match.participant_b }} <small class="muted">({{ match.points }} pts)</small></h4>
+    <details>
+        <summary>Edit</summary>
+        <form method="post" action="{{ url_for('edit_match', pool_id=pool.id, match_id=match.id) }}" class="inline-form" style="margin-top: 0.5rem;">
+            <input type="text" name="participant_a" value="{{ match.participant_a }}" placeholder="Fighter A" style="flex:2;">
+            <input type="text" name="participant_b" value="{{ match.participant_b }}" placeholder="Fighter B" style="flex:2;">
+            <input type="number" name="points" value="{{ match.points }}" min="1" style="flex:1; max-width: 5rem;">
+            <button type="submit" class="secondary">Save</button>
+        </form>
+        <form method="post" action="{{ url_for('delete_match', pool_id=pool.id, match_id=match.id) }}" style="margin-top: 0.5rem;">
+            <button type="submit" class="secondary outline" style="color: #dc3545; border-color: #dc3545; padding: 0.3rem 0.75rem; font-size: 0.8rem;"
+                    onclick="return confirm('Delete this match?')">Delete Match</button>
+        </form>
+    </details>
+</div>
+{% endfor %}
+
+{# --- Add match --- #}
+<div class="section-title">Add Match</div>
+<form method="post" action="{{ url_for('add_match', pool_id=pool.id) }}">
+    <div class="inline-form">
+        <input type="text" name="participant_a" placeholder="Fighter A" required style="flex: 2;">
+        <input type="text" name="participant_b" placeholder="Fighter B" required style="flex: 2;">
+        <input type="number" name="points" value="1" min="1" placeholder="Pts" style="flex: 1; max-width: 5rem;">
+        <button type="submit">Add</button>
+    </div>
+</form>
+
+{# --- Danger zone --- #}
+<div class="danger-zone">
+    <h4>Danger Zone</h4>
+    <form method="post" action="{{ url_for('delete_pool', pool_id=pool.id) }}">
+        <button type="submit" class="secondary outline" style="color: #dc3545; border-color: #dc3545;"
+                onclick="return confirm('Are you sure? This will permanently delete the pool and all predictions.')">
+            Delete This Pool
+        </button>
+    </form>
+</div>
+
+{% endblock %}

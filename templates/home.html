@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Prediction Pool{% endblock %}
+{% block header %}Prediction Pool{% endblock %}
+{% block subheader %}Predict fight outcomes &amp; compete with friends{% endblock %}
+
+{% block content %}
+<section>
+    <h3>Create a New Pool</h3>
+    <form method="post" action="{{ url_for('create_pool') }}">
+        <input type="text" name="name" placeholder="Pool name (e.g. Glory Heavyweight Finals 2026)" required autofocus>
+        <button type="submit">Create Pool</button>
+    </form>
+</section>
+
+<section>
+    <h3>Join an Existing Pool</h3>
+    <p><small class="muted">Paste the pool link you received from a friend, or enter the pool code.</small></p>
+    <form onsubmit="goToPool(event)">
+        <input type="text" id="pool-link" placeholder="Pool link or code" required>
+        <button type="submit" class="secondary">Go to Pool</button>
+    </form>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function goToPool(e) {
+    e.preventDefault();
+    const val = document.getElementById('pool-link').value.trim();
+    // If it's a full URL, extract the path; otherwise treat as pool ID
+    if (val.includes('/pool/')) {
+        window.location.href = val;
+    } else {
+        window.location.href = '/pool/' + val;
+    }
+}
+</script>
+{% endblock %}
