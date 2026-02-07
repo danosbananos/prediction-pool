@@ -133,21 +133,45 @@ def get_pool_or_404(pool_id):
     return pool
 
 
-def fetch_fighter_data(match):
-    """Fetch and store fighter data for both fighters in a match."""
-    data_a = lookup_fighter(match.participant_a)
-    match.fighter_a_image = data_a.get("image_url")
-    match.fighter_a_record = data_a.get("record")
-    match.fighter_a_nationality = data_a.get("nationality")
-    match.fighter_a_flag = data_a.get("nationality_flag")
+def fetch_fighter_data(match, skip_a=False, skip_b=False):
+    """
+    Fetch and store fighter data for fighters in a match.
 
-    data_b = lookup_fighter(match.participant_b)
-    match.fighter_b_image = data_b.get("image_url")
-    match.fighter_b_record = data_b.get("record")
-    match.fighter_b_nationality = data_b.get("nationality")
-    match.fighter_b_flag = data_b.get("nationality_flag")
+    Args:
+        skip_a: If True, don't fetch for fighter A (already has data)
+        skip_b: If True, don't fetch for fighter B (already has data)
+
+    Returns:
+        dict with 'found_a' and 'found_b' booleans indicating whether
+        data was found for each fighter.
+    """
+    found_a = False
+    found_b = False
+
+    if not skip_a:
+        data_a = lookup_fighter(match.participant_a)
+        if any(v for k, v in data_a.items() if k != "nationality_flag"):
+            match.fighter_a_image = data_a.get("image_url") or match.fighter_a_image
+            match.fighter_a_record = data_a.get("record") or match.fighter_a_record
+            match.fighter_a_nationality = data_a.get("nationality") or match.fighter_a_nationality
+            match.fighter_a_flag = data_a.get("nationality_flag") or match.fighter_a_flag
+            found_a = True
+    else:
+        found_a = True  # already had data
+
+    if not skip_b:
+        data_b = lookup_fighter(match.participant_b)
+        if any(v for k, v in data_b.items() if k != "nationality_flag"):
+            match.fighter_b_image = data_b.get("image_url") or match.fighter_b_image
+            match.fighter_b_record = data_b.get("record") or match.fighter_b_record
+            match.fighter_b_nationality = data_b.get("nationality") or match.fighter_b_nationality
+            match.fighter_b_flag = data_b.get("nationality_flag") or match.fighter_b_flag
+            found_b = True
+    else:
+        found_b = True  # already had data
 
     match.data_fetched = True
+    return {'found_a': found_a, 'found_b': found_b}
 
 
 def fetch_odds_data(match):
@@ -435,10 +459,15 @@ def add_match(pool_id):
     db.session.flush()  # get match.id before fetching
 
     # Auto-fetch fighter data + odds
+    not_found = []
     try:
-        fetch_fighter_data(match)
+        result = fetch_fighter_data(match)
+        if not result['found_a']:
+            not_found.append(a)
+        if not result['found_b']:
+            not_found.append(b)
     except Exception:
-        pass  # graceful fallback — match works without fighter data
+        not_found = [a, b]
     try:
         fetch_odds_data(match)
     except Exception:
@@ -446,6 +475,8 @@ def add_match(pool_id):
 
     db.session.commit()
     flash(f'Match added: {a} vs {b} (×{multiplier})', 'success')
+    if not_found:
+        flash(f'Could not find data for: {", ".join(not_found)}. You can enter it manually in settings.', 'error')
     return redirect(url_for('pool_settings', pool_id=pool_id))
 
 
@@ -484,9 +515,14 @@ def edit_match(pool_id, match_id):
         pass
 
     # Re-fetch fighter data + odds if names changed
+    not_found = []
     if names_changed:
         try:
-            fetch_fighter_data(match)
+            result = fetch_fighter_data(match)
+            if not result['found_a']:
+                not_found.append(match.participant_a)
+            if not result['found_b']:
+                not_found.append(match.participant_b)
         except Exception:
             pass
         try:
@@ -496,6 +532,8 @@ def edit_match(pool_id, match_id):
 
     db.session.commit()
     flash('Match updated.', 'success')
+    if not_found:
+        flash(f'Could not find data for: {", ".join(not_found)}. You can enter it manually.', 'error')
     return redirect(url_for('pool_settings', pool_id=pool_id))
 
 
@@ -523,16 +561,28 @@ def update_fighter_data(pool_id, match_id):
 
 
 @app.route('/pool/<pool_id>/match/<int:match_id>/refetch', methods=['POST'])
-def refetch_fighter_data(pool_id, match_id):
+def refetch_fighter_data_route(pool_id, match_id):
     pool = get_pool_or_404(pool_id)
     match = db.session.get(Match, match_id)
     if not match or match.pool_id != pool_id:
         abort(404)
 
     try:
-        fetch_fighter_data(match)
+        result = fetch_fighter_data(match)
         db.session.commit()
-        flash('Fighter data refreshed.', 'success')
+
+        not_found = []
+        if not result['found_a']:
+            not_found.append(match.participant_a)
+        if not result['found_b']:
+            not_found.append(match.participant_b)
+
+        if not not_found:
+            flash('Fighter data refreshed.', 'success')
+        elif len(not_found) == 2:
+            flash(f'No data found for {match.participant_a} or {match.participant_b}.', 'error')
+        else:
+            flash(f'Data refreshed, but nothing found for {not_found[0]}.', 'error')
     except Exception:
         flash('Could not fetch fighter data.', 'error')
 
@@ -630,6 +680,7 @@ def upload_csv(pool_id):
         return redirect(url_for('pool_settings', pool_id=pool_id))
 
     added = 0
+    not_found_fighters = []
     base_order = len(pool.matches)
     for i, md in enumerate(matches_data):
         match = Match(
@@ -659,12 +710,20 @@ def upload_csv(pool_id):
         db.session.add(match)
         db.session.flush()
 
-        # Auto-fetch fighter data if not provided in CSV
-        if not match.fighter_a_record and not match.fighter_b_record:
-            try:
-                fetch_fighter_data(match)
-            except Exception:
-                pass
+        # Auto-fetch fighter data per-fighter (skip if CSV already provided data)
+        has_a_data = match.fighter_a_record or match.fighter_a_image
+        has_b_data = match.fighter_b_record or match.fighter_b_image
+        try:
+            result = fetch_fighter_data(match, skip_a=has_a_data, skip_b=has_b_data)
+            if not result['found_a']:
+                not_found_fighters.append(md['fighter_a'])
+            if not result['found_b']:
+                not_found_fighters.append(md['fighter_b'])
+        except Exception:
+            if not has_a_data:
+                not_found_fighters.append(md['fighter_a'])
+            if not has_b_data:
+                not_found_fighters.append(md['fighter_b'])
 
         # Auto-fetch odds if not provided in CSV
         if not match.odds_a and not match.odds_b:
@@ -677,6 +736,8 @@ def upload_csv(pool_id):
 
     db.session.commit()
     flash(f'{added} match{"es" if added != 1 else ""} imported from CSV.', 'success')
+    if not_found_fighters:
+        flash(f'Could not find data for: {", ".join(not_found_fighters)}. You can enter it manually in settings.', 'error')
     return redirect(url_for('pool_settings', pool_id=pool_id))
 
 
