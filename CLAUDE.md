@@ -39,7 +39,8 @@ Built as a server-rendered Flask app — no SPA, no frontend framework, no JavaS
 | `templates/home.html` | Homepage: create pool |
 | `templates/join.html` | Join pool form |
 | `templates/signin.html` | Sign back in form |
-| `future-ideas.md` | Roadmap, backlog, and known bugs |
+| `product-backlog.md` | Roadmap, backlog, and known bugs |
+| `ux-overhaul-plan.md` | Technical spec for the UX overhaul (temporary — delete after implementation) |
 | `CLAUDE.md` | This file — project instructions for Claude |
 
 ## Git Workflow
@@ -47,7 +48,7 @@ Built as a server-rendered Flask app — no SPA, no frontend framework, no JavaS
 - New features / feature bundles go on a `feature/<name>` branch.
 - Bugfixes go on a `bugfix/<name>` branch.
 - Always ask before committing and before pushing.
-- After pushing, automatically continue with: create PR and merge to main. Don't ask for confirmation on PR/merge steps.
+- After pushing, automatically create a PR. Always ask before merging to main.
 - Note: this repo uses a git worktree. `git checkout main` fails because main is checked out in the primary worktree. PR merges succeed on GitHub but the local checkout step errors — this is expected, verify with `gh api`.
 
 ## Environment Variables
@@ -63,7 +64,7 @@ Built as a server-rendered Flask app — no SPA, no frontend framework, no JavaS
 
 When resuming work on this project:
 1. Check `git status` and `git log --oneline -5` to see where things left off
-2. Check `future-ideas.md` for the backlog and known bugs
+2. Check `product-backlog.md` for the backlog and known bugs
 3. Run `PORT=5050 python3 app.py` to start locally
 4. The GitHub repo is `danosbananos/prediction-pool` — use `gh` CLI for PRs
 
@@ -86,11 +87,10 @@ PORT=5050 python3 app.py
 
 ## Roadmap
 
-See `future-ideas.md` for the full backlog. Priority items:
-1. Fix comma decimal separator in odds fields
-2. Fix predictions on reopened pool
-3. Hide predictions from others until pool is locked
-4. Add favicon
-5. Save fighters to database for reuse across pools
-6. Pool browser view
-7. Pool banner image
+See `product-backlog.md` for the full backlog. Priority items:
+1. Settings UX overhaul (two-tab layout, unified match editor) — see `ux-overhaul-plan.md`
+2. Fighter database + autocomplete
+3. Odds auto-fetch investigation
+4. Hide predictions from others until pool is locked
+5. Accept commas as decimal separators in odds fields
+6. Add favicon
