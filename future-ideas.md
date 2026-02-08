@@ -62,6 +62,13 @@ Ideas for future versions, collected during initial planning. Not in scope for v
 - Review the fetch fighter data feature — currently not producing results
 - Investigate deployment without re-creating the database (likely cause of lost pool data on last deploy)
 - Hide predictions from other participants until the pool is locked
+- Accept commas as decimal separators in odds fields (iPhone NL keyboard shows comma, field only accepts periods)
+- Fix: cannot save predictions on matches added to a re-opened pool
+
+## New Features
+- Save fighters to database tables for reuse in new matches and pools
+- Add a view of all pools where a user can browse and click to join
+- Add an image/banner to a pool
 
 ## Data & Analytics
 - Prediction accuracy stats per user over time

@@ -3,6 +3,7 @@ import io
 import csv
 import uuid
 import secrets
+import logging
 from datetime import datetime
 from functools import wraps
 
@@ -14,6 +15,8 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from fighter_lookup import lookup_fighter
 from odds_lookup import lookup_odds
+
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 # Use a stable secret key: env var, or fall back to a file-based key so
@@ -167,22 +170,33 @@ def fetch_fighter_data(match, skip_a=False, skip_b=False):
 
     if not skip_a:
         data_a = lookup_fighter(match.participant_a)
+        logger.info("Lookup result for '%s': %s", match.participant_a, data_a)
         if any(v for k, v in data_a.items() if k != "nationality_flag"):
-            match.fighter_a_image = data_a.get("image_url") or match.fighter_a_image
-            match.fighter_a_record = data_a.get("record") or match.fighter_a_record
-            match.fighter_a_nationality = data_a.get("nationality") or match.fighter_a_nationality
-            match.fighter_a_flag = data_a.get("nationality_flag") or match.fighter_a_flag
+            if data_a.get("image_url"):
+                match.fighter_a_image = data_a["image_url"]
+            if data_a.get("record"):
+                match.fighter_a_record = data_a["record"]
+            if data_a.get("nationality"):
+                match.fighter_a_nationality = data_a["nationality"]
+            # Flag can be empty string, so use explicit None check
+            if data_a.get("nationality_flag") is not None:
+                match.fighter_a_flag = data_a["nationality_flag"] or None
             found_a = True
     else:
         found_a = True  # already had data
 
     if not skip_b:
         data_b = lookup_fighter(match.participant_b)
+        logger.info("Lookup result for '%s': %s", match.participant_b, data_b)
         if any(v for k, v in data_b.items() if k != "nationality_flag"):
-            match.fighter_b_image = data_b.get("image_url") or match.fighter_b_image
-            match.fighter_b_record = data_b.get("record") or match.fighter_b_record
-            match.fighter_b_nationality = data_b.get("nationality") or match.fighter_b_nationality
-            match.fighter_b_flag = data_b.get("nationality_flag") or match.fighter_b_flag
+            if data_b.get("image_url"):
+                match.fighter_b_image = data_b["image_url"]
+            if data_b.get("record"):
+                match.fighter_b_record = data_b["record"]
+            if data_b.get("nationality"):
+                match.fighter_b_nationality = data_b["nationality"]
+            if data_b.get("nationality_flag") is not None:
+                match.fighter_b_flag = data_b["nationality_flag"] or None
             found_b = True
     else:
         found_b = True  # already had data

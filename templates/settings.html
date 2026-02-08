@@ -65,7 +65,7 @@
 
 {% for match in pool.matches %}
 <div class="match-settings-card">
-    <h4>{{ match.fighter_a_flag }} {{ match.participant_a }} vs {{ match.participant_b }} {{ match.fighter_b_flag }} <small class="muted">(×{{ match.multiplier }})</small></h4>
+    <h4>{{ match.fighter_a_flag or '' }} {{ match.participant_a }} vs {{ match.participant_b }} {{ match.fighter_b_flag or '' }} <small class="muted">(×{{ match.multiplier }})</small></h4>
     {% if match.data_fetched %}
     <div style="font-size: 0.75rem; color: var(--text-dim); margin-bottom: 0.5rem;">
         {% if match.fighter_a_record %}{{ match.participant_a }}: {{ match.fighter_a_record }}{% endif %}

@@ -87,7 +87,7 @@
                     {% if match.fighter_a_image %}
                         <img src="{{ match.fighter_a_image }}" alt="{{ match.participant_a }}" class="fighter-photo">
                     {% endif %}
-                    <span>{{ match.fighter_a_flag }} {{ match.participant_a }}</span>
+                    <span>{{ match.fighter_a_flag or '' }} {{ match.participant_a }}</span>
                     {% if match.odds_a %}
                         <span class="odds-badge">{{ '%.2f'|format(match.odds_a) }}</span>
                     {% endif %}
@@ -104,7 +104,7 @@
                     {% if match.fighter_a_image %}
                         <img src="{{ match.fighter_a_image }}" alt="{{ match.participant_a }}" class="fighter-photo">
                     {% endif %}
-                    <span>{{ match.fighter_a_flag }} {{ match.participant_a }}</span>
+                    <span>{{ match.fighter_a_flag or '' }} {{ match.participant_a }}</span>
                     {% if match.odds_a %}
                         <span class="odds-badge">{{ '%.2f'|format(match.odds_a) }}</span>
                     {% endif %}
@@ -125,7 +125,7 @@
                     {% if match.fighter_b_image %}
                         <img src="{{ match.fighter_b_image }}" alt="{{ match.participant_b }}" class="fighter-photo">
                     {% endif %}
-                    <span>{{ match.fighter_b_flag }} {{ match.participant_b }}</span>
+                    <span>{{ match.fighter_b_flag or '' }} {{ match.participant_b }}</span>
                     {% if match.odds_b %}
                         <span class="odds-badge">{{ '%.2f'|format(match.odds_b) }}</span>
                     {% endif %}
@@ -142,7 +142,7 @@
                     {% if match.fighter_b_image %}
                         <img src="{{ match.fighter_b_image }}" alt="{{ match.participant_b }}" class="fighter-photo">
                     {% endif %}
-                    <span>{{ match.fighter_b_flag }} {{ match.participant_b }}</span>
+                    <span>{{ match.fighter_b_flag or '' }} {{ match.participant_b }}</span>
                     {% if match.odds_b %}
                         <span class="odds-badge">{{ '%.2f'|format(match.odds_b) }}</span>
                     {% endif %}
