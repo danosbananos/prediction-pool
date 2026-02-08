@@ -8,6 +8,7 @@ Falls back gracefully if nothing is found.
 import re
 import json
 import logging
+import unicodedata
 import urllib.request
 import urllib.parse
 from urllib.error import URLError
@@ -18,11 +19,11 @@ USER_AGENT = "PredictionPool/1.0 (https://github.com/prediction-pool)"
 REQUEST_TIMEOUT = 10
 
 
-def _api_get(url):
+def _api_get(url, timeout=None):
     """Make a GET request with proper User-Agent, return parsed JSON or None."""
     try:
         req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-        resp = urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT)
+        resp = urllib.request.urlopen(req, timeout=timeout or REQUEST_TIMEOUT)
         return json.loads(resp.read())
     except (URLError, json.JSONDecodeError, OSError) as e:
         logger.warning("API request failed for %s: %s", url, e)
@@ -186,10 +187,78 @@ def _extract_infobox_value(wikitext, field_name):
     return None
 
 
+def _name_to_slug(name):
+    """Convert a fighter name to a URL slug (e.g. 'Miloš Cvjetićanin' -> 'milos-cvjeticanin')."""
+    # Normalize unicode: ć->c, š->s, etc.
+    normalized = unicodedata.normalize('NFKD', name).encode('ascii', 'ignore').decode()
+    slug = normalized.lower().strip().replace(' ', '-')
+    slug = re.sub(r'[^a-z0-9-]', '', slug)
+    return slug
+
+
+def _lookup_glory(name):
+    """
+    Look up fighter data from the Glory Kickboxing API.
+
+    Returns dict with image_url, record, nationality, nationality_flag
+    or None if not found.
+    """
+    slug = _name_to_slug(name)
+    if not slug:
+        return None
+
+    url = (
+        f"https://glory-api.pinkyellow.computer/api/collections/fighters/entries"
+        f"?filter[slug]={urllib.parse.quote(slug)}"
+    )
+    data = _api_get(url, timeout=20)
+    if not data or not data.get("data"):
+        return None
+
+    fighter = data["data"][0]
+    result = {
+        "image_url": None,
+        "record": None,
+        "nationality": None,
+        "nationality_flag": "",
+    }
+
+    # Image: prefer passport_image (clean portrait), fall back to front_image
+    for img_field in ("passport_image", "front_image"):
+        img = fighter.get(img_field)
+        if isinstance(img, dict) and img.get("url"):
+            result["image_url"] = img["url"]
+            break
+
+    # Record
+    wins = fighter.get("wins")
+    losses = fighter.get("losses")
+    if wins is not None:
+        draws = fighter.get("draws") or 0
+        losses = losses or 0
+        result["record"] = f"{wins}-{losses}-{draws}"
+
+    # Nationality
+    nat_list = fighter.get("nationality")
+    if nat_list and isinstance(nat_list, list) and len(nat_list) > 0:
+        nat = nat_list[0]
+        result["nationality"] = nat.get("label", "")
+        country_code = nat.get("key", "")
+        if country_code and len(country_code) == 2:
+            result["nationality_flag"] = "".join(
+                chr(0x1F1E6 + ord(c) - ord("A")) for c in country_code.upper()
+            )
+
+    logger.info("Glory API result for '%s' (slug=%s): found=%s",
+                name, slug, any(v for k, v in result.items() if k != "nationality_flag"))
+    return result
+
+
 def lookup_fighter(name):
     """
     Look up fighter data by name.
 
+    Tries Glory Kickboxing API first, then falls back to Wikipedia/Wikidata.
     Returns dict with keys: image_url, record, nationality, nationality_flag
     All values may be None if not found.
     """
@@ -206,22 +275,34 @@ def lookup_fighter(name):
     name = name.strip()
     logger.info("Looking up fighter: %s", name)
 
-    # Step 1: Search Wikidata
-    entity_id = _search_wikidata(name)
-    if entity_id:
-        claims = _get_wikidata_claims(entity_id)
-        if claims:
-            result["image_url"] = _get_image_url(claims)
-            result["nationality"] = _get_nationality(claims)
-            if result["nationality"]:
-                result["nationality_flag"] = _country_to_flag(result["nationality"])
+    # Step 1: Try Glory Kickboxing API (primary source for Glory fighters)
+    glory_result = _lookup_glory(name)
+    if glory_result:
+        # Use Glory data as base
+        for key in result:
+            if glory_result.get(key):
+                result[key] = glory_result[key]
 
-    # Step 2: Get record from Wikipedia infobox
-    record = _get_record_from_wikipedia(name)
-    if record:
-        result["record"] = record
+    # Step 2: Fill gaps from Wikipedia/Wikidata
+    if not result["record"] or not result["nationality"] or not result["image_url"]:
+        entity_id = _search_wikidata(name)
+        if entity_id:
+            claims = _get_wikidata_claims(entity_id)
+            if claims:
+                if not result["image_url"]:
+                    result["image_url"] = _get_image_url(claims)
+                if not result["nationality"]:
+                    result["nationality"] = _get_nationality(claims)
+                    if result["nationality"]:
+                        result["nationality_flag"] = _country_to_flag(result["nationality"])
 
-    # Step 3: If no image from Wikidata, try Wikipedia page image
+    # Step 3: Try Wikipedia record if still missing
+    if not result["record"]:
+        record = _get_record_from_wikipedia(name)
+        if record:
+            result["record"] = record
+
+    # Step 4: If still no image, try Wikipedia page image
     if not result["image_url"]:
         title = urllib.parse.quote(name.replace(" ", "_"))
         url = (
