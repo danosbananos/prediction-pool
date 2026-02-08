@@ -38,6 +38,9 @@ Ideas for future versions, collected during initial planning. Not in scope for v
 - Multiple pools per tournament
 - Pool templates (pre-fill common match formats)
 - Pool chat / trash talk section
+- Public pool directory: browse and view all pools (read-only for non-participants)
+- Creator-only editing: pool creator can lock editing so only they can modify the pool (default behavior)
+- Next-round placeholder fights: add fights where fighters are "winner of fight X vs Y", with odds to be filled in later once the winners are known
 
 ## Social Features
 - Historical leaderboard across multiple tournaments
