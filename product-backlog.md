@@ -127,6 +127,8 @@ Pick the simplest option and document how to use it.
 - Accept commas as decimal separators in odds fields (iPhone NL keyboard shows comma, field only accepts periods)
 - Toast notifications should be fixed/sticky so they're always visible, not at the top of the page requiring scroll
 - Enable Progressive Web App (PWA) — manifest, service worker, installable on mobile
+- Prevent 1Password/autofill popups on Pool Name, Your Name, and PIN fields (blocks the submit button on mobile) — use `autocomplete="off"` or similar attributes
+- When fighters have abbreviated first names (e.g. "A. Bouzid") and are successfully fetched from the Glory API, update the name in the match to the full first name
 
 ## New Features
 
