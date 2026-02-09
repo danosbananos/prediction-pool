@@ -7,6 +7,17 @@
     {% if pool.description %}<br>{{ pool.description }}{% endif %}
 {% endblock %}
 
+{% block user_bar %}
+{% if me %}
+<div class="user-bar">
+    <span>{{ me.display_name }}</span>
+    <form method="post" action="{{ url_for('logout', pool_id=pool.id) }}">
+        <button type="submit" class="btn-sign-out">Sign Out</button>
+    </form>
+</div>
+{% endif %}
+{% endblock %}
+
 {% block content %}
 
 {# --- Share link --- #}
@@ -25,14 +36,12 @@
 {% endif %}
 
 {# --- Action bar --- #}
+{% if not me %}
 <div class="actions-bar">
-    {% if not me %}
-        <a href="{{ url_for('join_pool', pool_id=pool.id) }}" class="btn btn-primary btn-sm">Join Pool</a>
-        <a href="{{ url_for('signin', pool_id=pool.id) }}" class="btn btn-outline btn-sm">Sign Back In</a>
-    {% else %}
-        <span class="signed-in-as">Signed in as <strong>{{ me.display_name }}</strong></span>
-    {% endif %}
+    <a href="{{ url_for('join_pool', pool_id=pool.id) }}" class="btn btn-primary btn-sm">Join Pool</a>
+    <a href="{{ url_for('signin', pool_id=pool.id) }}" class="btn btn-outline btn-sm">Sign Back In</a>
 </div>
+{% endif %}
 
 {# --- Tab Bar --- #}
 <div class="tab-bar">

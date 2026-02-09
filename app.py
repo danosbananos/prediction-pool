@@ -425,6 +425,18 @@ def signin(pool_id):
 
 
 # ---------------------------------------------------------------------------
+# Routes — Sign out
+# ---------------------------------------------------------------------------
+
+@app.route('/pool/<pool_id>/logout', methods=['POST'])
+def logout(pool_id):
+    pool = get_pool_or_404(pool_id)
+    session.pop(f'participant_{pool_id}', None)
+    flash('You have been signed out.', 'success')
+    return redirect(url_for('pool_view', pool_id=pool_id))
+
+
+# ---------------------------------------------------------------------------
 # Routes — Save Predictions
 # ---------------------------------------------------------------------------
 
