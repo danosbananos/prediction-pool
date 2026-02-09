@@ -6,16 +6,6 @@
 
 Pick a lane — items within each group are independent and can be done in any order.
 
-### Quick wins (small, ship in a session)
-
-| Item | Description |
-|------|-------------|
-| **Favicon** | Add a favicon so the browser tab isn't blank |
-| **Comma decimals** | Accept commas as decimal separators in odds fields (iPhone NL keyboard shows comma, field only accepts periods) |
-| **Autofill suppression** | Prevent 1Password/autofill popups on Pool Name, Your Name, and PIN fields — blocks the submit button on mobile. Use `autocomplete="off"` or similar attributes |
-| **Abbreviated names → full names** | When fighters have abbreviated first names (e.g. "A. Bouzid") and are successfully fetched from the Glory API, update the match to use the full first name |
-| **Sticky toasts** | Toast notifications should be fixed/sticky so they're always visible, not scrolled off the top of the page |
-
 ### UX & gameplay improvements (medium effort)
 
 | Item | Description |
@@ -108,6 +98,13 @@ Pick the simplest option and document how to use it.
 ### Sign out ✅ DONE
 - Sign out button in pool header (top-right)
 - Clears session for that pool only
+
+### Quick wins ✅ DONE (b4a7e96)
+- Favicon (boxing glove emoji)
+- Comma decimal separators accepted in all odds fields
+- 1Password/autofill suppression on name and PIN inputs
+- Abbreviated fighter names updated to full names from Glory API
+- Sticky toast notifications (fixed position, opaque, auto-dismiss)
 
 ### Enhanced Match Data ✅ DONE
 - Auto-fetched from Glory API (primary) + Wikipedia/Wikidata (fallback)
