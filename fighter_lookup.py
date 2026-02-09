@@ -196,6 +196,11 @@ def _name_to_slug(name):
     return slug
 
 
+def _has_abbreviated_first_name(name):
+    """Check if a name has an abbreviated first name like 'A. Bouzid' or 'A Bouzid'."""
+    return bool(re.match(r'^[A-Z]\.?\s+\S', name.strip()))
+
+
 def _lookup_glory(name):
     """
     Look up fighter data from the Glory Kickboxing API.
@@ -207,11 +212,33 @@ def _lookup_glory(name):
     if not slug:
         return None
 
+    # Try exact slug match first
     url = (
         f"https://glory-api.pinkyellow.computer/api/collections/fighters/entries"
         f"?filter[slug]={urllib.parse.quote(slug)}"
     )
     data = _api_get(url, timeout=20)
+
+    # If not found and name has an abbreviated first name, try last-name contains search
+    if (not data or not data.get("data")) and _has_abbreviated_first_name(name):
+        parts = name.strip().split()
+        if len(parts) >= 2:
+            last_name = _name_to_slug(parts[-1])
+            initial = parts[0].rstrip('.').lower()
+            if last_name:
+                url = (
+                    f"https://glory-api.pinkyellow.computer/api/collections/fighters/entries"
+                    f"?filter[slug:contains]={urllib.parse.quote(last_name)}"
+                )
+                data = _api_get(url, timeout=20)
+                # Filter results: slug must start with the initial
+                if data and data.get("data"):
+                    matches = [f for f in data["data"] if f.get("slug", "").startswith(initial)]
+                    if matches:
+                        data["data"] = matches
+                    else:
+                        data = None
+
     if not data or not data.get("data"):
         return None
 

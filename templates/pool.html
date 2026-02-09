@@ -32,31 +32,18 @@
     {% else %}
         <span class="signed-in-as">Signed in as <strong>{{ me.display_name }}</strong></span>
     {% endif %}
-
-    <a href="{{ url_for('pool_settings', pool_id=pool.id) }}" class="btn btn-outline btn-sm ml-auto">Settings</a>
 </div>
 
-{# --- Pool status controls --- #}
-<div class="actions-bar">
-    {% if pool.status == 'open' %}
-        <form method="post" action="{{ url_for('lock_pool', pool_id=pool.id) }}">
-            <button type="submit" class="btn btn-secondary btn-sm" onclick="return confirm('Lock the pool? No more predictions will be allowed.')">Lock Predictions</button>
-        </form>
-    {% elif pool.status == 'locked' %}
-        <form method="post" action="{{ url_for('reopen_pool', pool_id=pool.id) }}">
-            <button type="submit" class="btn btn-outline btn-sm">Reopen for Predictions</button>
-        </form>
-        {% if pool.all_results_entered %}
-        <form method="post" action="{{ url_for('finish_pool', pool_id=pool.id) }}">
-            <button type="submit" class="btn btn-primary btn-sm" onclick="return confirm('Finish the pool and declare a winner?')">Finish &amp; Declare Winner</button>
-        </form>
-        {% endif %}
-    {% elif pool.status == 'finished' %}
-        <form method="post" action="{{ url_for('reopen_pool', pool_id=pool.id) }}">
-            <button type="submit" class="btn btn-outline btn-sm">Reopen Pool</button>
-        </form>
-    {% endif %}
+{# --- Tab Bar --- #}
+<div class="tab-bar">
+    <button class="tab-btn active" data-tab="tab-predictions" onclick="switchTab('tab-predictions')">My Predictions</button>
+    <button class="tab-btn" data-tab="tab-pool" onclick="switchTab('tab-pool')">Pool</button>
 </div>
+
+{# ================================================================== #}
+{# TAB 1 — MY PREDICTIONS                                             #}
+{# ================================================================== #}
+<div id="tab-predictions" class="tab-panel active">
 
 {# --- Matches + Predictions --- #}
 {% if pool.matches %}
@@ -175,27 +162,13 @@
     </div>
     {% endif %}
 
-    {# Result display or entry #}
+    {# Result display (read-only on Predictions tab) #}
     {% if match.result %}
         <div class="picks-detail">
             <strong>Winner:
             {% if match.result == 'a' %}{{ match.participant_a }}
             {% elif match.result == 'b' %}{{ match.participant_b }}
             {% else %}Draw{% endif %}</strong>
-            · <form method="post" action="{{ url_for('clear_result', pool_id=pool.id, match_id=match.id) }}" style="display:inline;">
-                <button type="submit" class="btn btn-outline btn-sm" style="padding:0.15rem 0.4rem; font-size:0.7rem; vertical-align: middle;">Clear</button>
-            </form>
-        </div>
-    {% elif pool.status in ('locked', 'finished') %}
-        <div class="result-btns">
-            <form method="post" action="{{ url_for('enter_result', pool_id=pool.id, match_id=match.id) }}">
-                <input type="hidden" name="result" value="a">
-                <button type="submit" class="btn btn-outline btn-sm">{{ match.participant_a }} wins</button>
-            </form>
-            <form method="post" action="{{ url_for('enter_result', pool_id=pool.id, match_id=match.id) }}">
-                <input type="hidden" name="result" value="b">
-                <button type="submit" class="btn btn-outline btn-sm">{{ match.participant_b }} wins</button>
-            </form>
         </div>
     {% endif %}
 </div>
@@ -207,7 +180,7 @@
 {% endif %}
 
 {% else %}
-<p class="mt-2" style="color: var(--text-muted);">No matches yet. <a href="{{ url_for('pool_settings', pool_id=pool.id) }}">Add some matches</a> to get started.</p>
+<p class="mt-2" style="color: var(--text-muted);">No matches yet. <a href="#" onclick="switchTab('tab-pool'); return false;">Add some matches</a> to get started.</p>
 {% endif %}
 
 {# --- All picks (visible when locked/finished) --- #}
@@ -269,10 +242,239 @@
 </div>
 {% endif %}
 
+</div>{# end tab-predictions #}
+
+{# ================================================================== #}
+{# TAB 2 — POOL                                                       #}
+{# ================================================================== #}
+<div id="tab-pool" class="tab-panel">
+
+{# --- Pool status controls --- #}
+<div class="pool-controls">
+    <div class="actions-bar">
+        {% if pool.status == 'open' %}
+            <form method="post" action="{{ url_for('lock_pool', pool_id=pool.id) }}">
+                <button type="submit" class="btn btn-secondary btn-sm" onclick="return confirm('Lock the pool? No more predictions will be allowed.')">Lock Pool</button>
+            </form>
+            <div class="hint">No one can change predictions after locking</div>
+        {% elif pool.status == 'locked' %}
+            <form method="post" action="{{ url_for('reopen_pool', pool_id=pool.id) }}">
+                <button type="submit" class="btn btn-outline btn-sm">Reopen for Predictions</button>
+            </form>
+            {% if pool.all_results_entered %}
+            <form method="post" action="{{ url_for('finish_pool', pool_id=pool.id) }}">
+                <button type="submit" class="btn btn-primary btn-sm" onclick="return confirm('Finish the pool and declare a winner?')">Finish &amp; Declare Winner</button>
+            </form>
+            {% endif %}
+        {% elif pool.status == 'finished' %}
+            <form method="post" action="{{ url_for('reopen_pool', pool_id=pool.id) }}">
+                <button type="submit" class="btn btn-outline btn-sm">Reopen Pool</button>
+            </form>
+        {% endif %}
+    </div>
+</div>
+
+{# --- Result entry (when locked/finished) --- #}
+{% if pool.status in ('locked', 'finished') and pool.matches %}
+<div class="section-title">Enter Results</div>
+{% for match in pool.matches %}
+<div class="match-card {% if match.result %}has-result{% endif %}" style="padding: 0.75rem 1rem;">
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap;">
+        <span style="font-family: var(--font-condensed); font-weight: 700; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.03em;">
+            {{ match.fighter_a_flag or '' }} {{ match.participant_a }} vs {{ match.participant_b }} {{ match.fighter_b_flag or '' }}
+        </span>
+        {% if match.result %}
+            <span style="font-size: 0.78rem; color: var(--green); font-weight: 600;">
+                Winner: {% if match.result == 'a' %}{{ match.participant_a }}{% elif match.result == 'b' %}{{ match.participant_b }}{% else %}Draw{% endif %}
+            </span>
+            <form method="post" action="{{ url_for('clear_result', pool_id=pool.id, match_id=match.id) }}" style="display:inline;">
+                <button type="submit" class="btn btn-outline btn-sm" style="padding:0.15rem 0.4rem; font-size:0.7rem;">Clear</button>
+            </form>
+        {% else %}
+            <div style="display: flex; gap: 0.35rem;">
+                <form method="post" action="{{ url_for('enter_result', pool_id=pool.id, match_id=match.id) }}">
+                    <input type="hidden" name="result" value="a">
+                    <button type="submit" class="btn btn-outline btn-sm" style="padding:0.3rem 0.6rem; font-size:0.72rem;">{{ match.participant_a }} wins</button>
+                </form>
+                <form method="post" action="{{ url_for('enter_result', pool_id=pool.id, match_id=match.id) }}">
+                    <input type="hidden" name="result" value="b">
+                    <button type="submit" class="btn btn-outline btn-sm" style="padding:0.3rem 0.6rem; font-size:0.72rem;">{{ match.participant_b }} wins</button>
+                </form>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+
+{# --- Admin match cards (accordion) --- #}
+<div class="section-title">Matches ({{ pool.matches|length }})</div>
+
+{% if pool.matches %}
+<form method="post" action="{{ url_for('fetch_all_fighter_data', pool_id=pool.id) }}" style="margin-bottom: 1rem;">
+    <button type="submit" class="btn btn-outline btn-sm">Fetch Missing Fighter Data</button>
+</form>
+{% endif %}
+
+{% for match in pool.matches %}
+<div class="admin-match-card" data-card-id="{{ match.id }}">
+    <div class="admin-match-header" onclick="toggleAdminCard(this)">
+        <span class="match-num">#{{ loop.index }}</span>
+        <span class="fighter-names">
+            {{ match.fighter_a_flag or '' }} {{ match.participant_a }} vs {{ match.participant_b }} {{ match.fighter_b_flag or '' }}
+        </span>
+        {% if match.odds_a %}<span class="odds-badge">{{ '%.2f'|format(match.odds_a) }}</span>{% endif %}
+        {% if match.odds_b %}<span class="odds-badge">{{ '%.2f'|format(match.odds_b) }}</span>{% endif %}
+        <span class="match-points">×{{ match.multiplier }}</span>
+        <span class="chevron">▼</span>
+    </div>
+    <div class="admin-match-body">
+        {# Unified match editing form (names, odds, multiplier, fighter data) #}
+        <form method="post" action="{{ url_for('edit_match', pool_id=pool.id, match_id=match.id) }}">
+            <div class="admin-edit-grid">
+                <div>
+                    <label>Fighter A</label>
+                    <input type="text" name="participant_a" value="{{ match.participant_a }}" placeholder="Fighter A">
+                </div>
+                <div>
+                    <label>Fighter A Odds</label>
+                    <input type="text" name="odds_a" value="{{ '%.2f'|format(match.odds_a) if match.odds_a else '' }}" placeholder="e.g. 1.50" inputmode="decimal">
+                </div>
+                <div>
+                    <label>Fighter B</label>
+                    <input type="text" name="participant_b" value="{{ match.participant_b }}" placeholder="Fighter B">
+                </div>
+                <div>
+                    <label>Fighter B Odds</label>
+                    <input type="text" name="odds_b" value="{{ '%.2f'|format(match.odds_b) if match.odds_b else '' }}" placeholder="e.g. 2.80" inputmode="decimal">
+                </div>
+            </div>
+            <label>Multiplier</label>
+            <input type="number" name="multiplier" value="{{ match.multiplier }}" min="1" style="max-width: 5rem;">
+
+            {# Fighter data fields #}
+            <div style="margin-top: 0.75rem; border-top: 1px solid var(--border); padding-top: 0.75rem;">
+                <label style="margin-top: 0; font-size: 0.72rem; color: var(--text-dim);">Fighter Data</label>
+                <label>{{ match.participant_a }} — Image URL</label>
+                <input type="text" name="fighter_a_image" value="{{ match.fighter_a_image or '' }}" placeholder="https://...">
+                <div class="admin-edit-grid">
+                    <div>
+                        <label>Record</label>
+                        <input type="text" name="fighter_a_record" value="{{ match.fighter_a_record or '' }}" placeholder="e.g. 45-12-0">
+                    </div>
+                    <div>
+                        <label>Nationality</label>
+                        <input type="text" name="fighter_a_nationality" value="{{ match.fighter_a_nationality or '' }}" placeholder="e.g. Netherlands">
+                    </div>
+                </div>
+                <label style="margin-top: 0.75rem;">{{ match.participant_b }} — Image URL</label>
+                <input type="text" name="fighter_b_image" value="{{ match.fighter_b_image or '' }}" placeholder="https://...">
+                <div class="admin-edit-grid">
+                    <div>
+                        <label>Record</label>
+                        <input type="text" name="fighter_b_record" value="{{ match.fighter_b_record or '' }}" placeholder="e.g. 38-11-0">
+                    </div>
+                    <div>
+                        <label>Nationality</label>
+                        <input type="text" name="fighter_b_nationality" value="{{ match.fighter_b_nationality or '' }}" placeholder="e.g. Morocco">
+                    </div>
+                </div>
+            </div>
+
+            <input type="hidden" name="_action" id="action_{{ match.id }}" value="save">
+            <div class="admin-actions">
+                <button type="submit" class="btn btn-secondary btn-sm">Save</button>
+                <button type="submit" class="btn btn-outline btn-sm" onclick="document.getElementById('action_{{ match.id }}').value='refetch_odds'">Re-fetch Odds</button>
+                <button type="submit" class="btn btn-outline btn-sm" onclick="document.getElementById('action_{{ match.id }}').value='refetch_fighter_data'">Re-fetch Fighter Data</button>
+            </div>
+        </form>
+        <div class="admin-actions" style="margin-top: 0.35rem;">
+            <form method="post" action="{{ url_for('delete_match', pool_id=pool.id, match_id=match.id) }}">
+                <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Delete this match?')">Delete</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+{# --- Add match --- #}
+<div class="section-title">Add Match</div>
+<div class="card">
+    <form method="post" action="{{ url_for('add_match', pool_id=pool.id) }}">
+        <div class="inline-form">
+            <input type="text" name="participant_a" placeholder="Fighter A" required style="flex: 2;">
+            <input type="text" name="participant_b" placeholder="Fighter B" required style="flex: 2;">
+            <input type="number" name="multiplier" value="1" min="1" placeholder="×" title="Multiplier" style="flex: 1; max-width: 5rem;">
+            <button type="submit" class="btn btn-primary btn-sm">Add</button>
+        </div>
+    </form>
+</div>
+
+{# --- CSV Upload --- #}
+<div class="section-title">Import Matches from CSV</div>
+<div class="card">
+    <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+        Upload a CSV to bulk-import matches with optional odds and fighter data.
+        <a href="{{ url_for('csv_template', pool_id=pool.id) }}">Download template</a>
+    </p>
+    <div class="csv-schema">
+        <div class="csv-schema-title">CSV columns</div>
+        <div class="csv-schema-cols">
+            <span class="csv-col required">fighter_a</span>
+            <span class="csv-col required">fighter_b</span>
+            <span class="csv-col optional">multiplier</span>
+            <span class="csv-col optional">odds_a</span>
+            <span class="csv-col optional">odds_b</span>
+            <span class="csv-col optional">fighter_a_record</span>
+            <span class="csv-col optional">fighter_a_nationality</span>
+            <span class="csv-col optional">fighter_b_record</span>
+            <span class="csv-col optional">fighter_b_nationality</span>
+            <span class="csv-col optional">fighter_a_image</span>
+            <span class="csv-col optional">fighter_b_image</span>
+        </div>
+        <p style="font-size: 0.72rem; color: var(--text-dim); margin-top: 0.4rem;">
+            Only <strong>fighter_a</strong> and <strong>fighter_b</strong> are required. All other columns are optional.
+            Missing fighter data will be auto-fetched from Wikipedia.
+        </p>
+    </div>
+    <form method="post" action="{{ url_for('upload_csv', pool_id=pool.id) }}" enctype="multipart/form-data" style="margin-top: 0.75rem;">
+        <div class="inline-form">
+            <input type="file" name="csv_file" accept=".csv" required style="flex: 1; font-size: 0.85rem;">
+            <button type="submit" class="btn btn-primary btn-sm">Upload CSV</button>
+        </div>
+    </form>
+</div>
+
+{# --- Link to settings --- #}
+<p class="mt-2 text-center">
+    <a href="{{ url_for('pool_settings', pool_id=pool.id) }}" style="font-size: 0.82rem;">Pool Settings (Name, Delete Pool)</a>
+</p>
+
+</div>{# end tab-pool #}
+
 {% endblock %}
 
 {% block scripts %}
 <script>
+function switchTab(tabId) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelector('[data-tab="' + tabId + '"]').classList.add('active');
+    document.getElementById(tabId).classList.add('active');
+    history.replaceState(null, '', '#' + tabId);
+}
+
+function toggleAdminCard(header) {
+    const card = header.closest('.admin-match-card');
+    const wasExpanded = card.classList.contains('expanded');
+    // Collapse all
+    document.querySelectorAll('.admin-match-card').forEach(c => c.classList.remove('expanded'));
+    // Expand clicked (if it wasn't already open)
+    if (!wasExpanded) {
+        card.classList.add('expanded');
+    }
+}
+
 function togglePick(btn, matchId, pick) {
     const hidden = document.getElementById('pick_' + matchId);
     const parent = btn.closest('.fighters');
@@ -289,6 +491,11 @@ function copyLink() {
         btn.textContent = 'Copied!';
         setTimeout(() => btn.textContent = 'Copy', 2000);
     });
+}
+
+// Auto-switch to Pool tab if hash is present
+if (window.location.hash === '#tab-pool') {
+    switchTab('tab-pool');
 }
 </script>
 {% endblock %}

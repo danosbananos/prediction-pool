@@ -125,6 +125,8 @@ Pick the simplest option and document how to use it.
 - ~~Fix: cannot save predictions on matches added to a re-opened pool~~ ✅ Fixed
 - Hide predictions from other participants until the pool is locked
 - Accept commas as decimal separators in odds fields (iPhone NL keyboard shows comma, field only accepts periods)
+- Toast notifications should be fixed/sticky so they're always visible, not at the top of the page requiring scroll
+- Enable Progressive Web App (PWA) — manifest, service worker, installable on mobile
 
 ## New Features
 
