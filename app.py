@@ -316,7 +316,7 @@ def create_pool():
     db.session.add(pool)
     db.session.commit()
     flash(f'Pool "{pool.name}" created! Now add some matches.', 'success')
-    return redirect(url_for('pool_settings', pool_id=pool.id))
+    return redirect(url_for('pool_view', pool_id=pool.id) + '#tab-pool')
 
 
 # ---------------------------------------------------------------------------
@@ -476,7 +476,7 @@ def add_match(pool_id):
 
     if not a or not b:
         flash('Both participant names are required.', 'error')
-        return redirect(url_for('pool_settings', pool_id=pool_id))
+        return redirect(url_for('pool_view', pool_id=pool_id) + '#tab-pool')
 
     try:
         multiplier = max(1, int(multiplier))
@@ -507,8 +507,8 @@ def add_match(pool_id):
     db.session.commit()
     flash(f'Match added: {a} vs {b} (×{multiplier})', 'success')
     if not_found:
-        flash(f'Could not find data for: {", ".join(not_found)}. You can enter it manually in settings.', 'error')
-    return redirect(url_for('pool_settings', pool_id=pool_id))
+        flash(f'Could not find data for: {", ".join(not_found)}. You can enter it manually in the Pool tab.', 'error')
+    return redirect(url_for('pool_view', pool_id=pool_id) + '#tab-pool')
 
 
 @app.route('/pool/<pool_id>/match/<int:match_id>/delete', methods=['POST'])
@@ -519,7 +519,7 @@ def delete_match(pool_id, match_id):
         db.session.delete(match)
         db.session.commit()
         flash('Match removed.', 'success')
-    return redirect(url_for('pool_settings', pool_id=pool_id))
+    return redirect(url_for('pool_view', pool_id=pool_id) + '#tab-pool')
 
 
 @app.route('/pool/<pool_id>/match/<int:match_id>/edit', methods=['POST'])
@@ -545,9 +545,38 @@ def edit_match(pool_id, match_id):
     except ValueError:
         pass
 
-    # Re-fetch fighter data + odds if names changed
+    # Handle odds fields (inline editing from Pool tab)
+    odds_a = request.form.get('odds_a', '').strip()
+    odds_b = request.form.get('odds_b', '').strip()
+    if odds_a is not None or odds_b is not None:
+        try:
+            match.odds_a = round(float(odds_a), 2) if odds_a else None
+        except ValueError:
+            match.odds_a = None
+        try:
+            match.odds_b = round(float(odds_b), 2) if odds_b else None
+        except ValueError:
+            match.odds_b = None
+        if match.odds_a or match.odds_b:
+            match.odds_source = 'Manual'
+            match.odds_fetched_at = datetime.utcnow()
+        else:
+            match.odds_source = None
+            match.odds_fetched_at = None
+
+    # Handle fighter data fields (unified form)
+    for field in ('fighter_a_image', 'fighter_a_record', 'fighter_a_nationality',
+                  'fighter_b_image', 'fighter_b_record', 'fighter_b_nationality'):
+        val = request.form.get(field)
+        if val is not None:
+            setattr(match, field, val.strip() or None)
+
+    # Handle _action: re-fetch requests (save + fetch in one submit)
+    action = request.form.get('_action', 'save')
+
+    # Re-fetch fighter data + odds if names changed OR explicitly requested
     not_found = []
-    if names_changed:
+    if names_changed or action == 'refetch_fighter_data':
         try:
             result = fetch_fighter_data(match)
             if not result['found_a']:
@@ -555,17 +584,40 @@ def edit_match(pool_id, match_id):
             if not result['found_b']:
                 not_found.append(match.participant_b)
         except Exception:
-            pass
+            if action == 'refetch_fighter_data':
+                flash('Could not fetch fighter data.', 'error')
+
+    if names_changed or action == 'refetch_odds':
+        old_source = match.odds_source
+        old_odds_a = match.odds_a
+        old_odds_b = match.odds_b
+        if action == 'refetch_odds':
+            match.odds_source = None  # clear so fetch_odds_data doesn't skip
         try:
             fetch_odds_data(match)
-        except Exception:
-            pass
+            if action == 'refetch_odds' and not (match.odds_a and match.odds_b):
+                match.odds_source = old_source
+                flash('No odds found for this matchup — try manual entry.', 'error')
+            elif action == 'refetch_odds':
+                if match.odds_a == old_odds_a and match.odds_b == old_odds_b:
+                    flash('Odds unchanged — retrieved values are the same.', 'success')
+                else:
+                    old_a = f'{old_odds_a:.2f}' if old_odds_a else '—'
+                    old_b = f'{old_odds_b:.2f}' if old_odds_b else '—'
+                    new_a = f'{match.odds_a:.2f}' if match.odds_a else '—'
+                    new_b = f'{match.odds_b:.2f}' if match.odds_b else '—'
+                    flash(f'Odds refreshed: {old_a}/{old_b} → {new_a}/{new_b}', 'success')
+        except Exception as e:
+            if action == 'refetch_odds':
+                match.odds_source = old_source
+                flash(f'Could not fetch odds: {e}', 'error')
 
     db.session.commit()
-    flash('Match updated.', 'success')
+    if action == 'save':
+        flash('Match updated.', 'success')
     if not_found:
         flash(f'Could not find data for: {", ".join(not_found)}. You can enter it manually.', 'error')
-    return redirect(url_for('pool_settings', pool_id=pool_id))
+    return redirect(url_for('pool_view', pool_id=pool_id) + '#tab-pool')
 
 
 # ---------------------------------------------------------------------------
@@ -588,7 +640,7 @@ def update_fighter_data(pool_id, match_id):
 
     db.session.commit()
     flash('Fighter data updated.', 'success')
-    return redirect(url_for('pool_settings', pool_id=pool_id))
+    return redirect(url_for('pool_view', pool_id=pool_id) + '#tab-pool')
 
 
 @app.route('/pool/<pool_id>/match/<int:match_id>/refetch', methods=['POST'])
@@ -617,7 +669,7 @@ def refetch_fighter_data_route(pool_id, match_id):
     except Exception:
         flash('Could not fetch fighter data.', 'error')
 
-    return redirect(url_for('pool_settings', pool_id=pool_id))
+    return redirect(url_for('pool_view', pool_id=pool_id) + '#tab-pool')
 
 
 @app.route('/pool/<pool_id>/fetch-all-fighter-data', methods=['POST'])
@@ -656,7 +708,7 @@ def fetch_all_fighter_data(pool_id):
     else:
         flash(f'No data found for: {", ".join(not_found)}.', 'error')
 
-    return redirect(url_for('pool_settings', pool_id=pool_id))
+    return redirect(url_for('pool_view', pool_id=pool_id) + '#tab-pool')
 
 
 # ---------------------------------------------------------------------------
@@ -691,7 +743,7 @@ def update_odds(pool_id, match_id):
 
     db.session.commit()
     flash('Odds updated.', 'success')
-    return redirect(url_for('pool_settings', pool_id=pool_id))
+    return redirect(url_for('pool_view', pool_id=pool_id) + '#tab-pool')
 
 
 @app.route('/pool/<pool_id>/match/<int:match_id>/refetch-odds', methods=['POST'])
@@ -718,7 +770,7 @@ def refetch_odds(pool_id, match_id):
         db.session.commit()
         flash('Could not fetch odds.', 'error')
 
-    return redirect(url_for('pool_settings', pool_id=pool_id))
+    return redirect(url_for('pool_view', pool_id=pool_id) + '#tab-pool')
 
 
 # ---------------------------------------------------------------------------
@@ -732,22 +784,22 @@ def upload_csv(pool_id):
     file = request.files.get('csv_file')
     if not file or not file.filename:
         flash('Please select a CSV file.', 'error')
-        return redirect(url_for('pool_settings', pool_id=pool_id))
+        return redirect(url_for('pool_view', pool_id=pool_id) + '#tab-pool')
 
     if not file.filename.lower().endswith('.csv'):
         flash('File must be a .csv file.', 'error')
-        return redirect(url_for('pool_settings', pool_id=pool_id))
+        return redirect(url_for('pool_view', pool_id=pool_id) + '#tab-pool')
 
     try:
         content = file.read()
         matches_data = parse_csv_matches(content)
     except Exception as e:
         flash(f'Error reading CSV: {e}', 'error')
-        return redirect(url_for('pool_settings', pool_id=pool_id))
+        return redirect(url_for('pool_view', pool_id=pool_id) + '#tab-pool')
 
     if not matches_data:
         flash('No valid matches found in CSV. Required columns: fighter_a, fighter_b', 'error')
-        return redirect(url_for('pool_settings', pool_id=pool_id))
+        return redirect(url_for('pool_view', pool_id=pool_id) + '#tab-pool')
 
     added = 0
     not_found_fighters = []
@@ -807,8 +859,8 @@ def upload_csv(pool_id):
     db.session.commit()
     flash(f'{added} match{"es" if added != 1 else ""} imported from CSV.', 'success')
     if not_found_fighters:
-        flash(f'Could not find data for: {", ".join(not_found_fighters)}. You can enter it manually in settings.', 'error')
-    return redirect(url_for('pool_settings', pool_id=pool_id))
+        flash(f'Could not find data for: {", ".join(not_found_fighters)}. You can enter it manually in the Pool tab.', 'error')
+    return redirect(url_for('pool_view', pool_id=pool_id) + '#tab-pool')
 
 
 @app.route('/pool/<pool_id>/csv-template')
@@ -896,7 +948,7 @@ def enter_result(pool_id, match_id):
     else:
         flash('Invalid result.', 'error')
 
-    return redirect(url_for('pool_view', pool_id=pool_id))
+    return redirect(url_for('pool_view', pool_id=pool_id) + '#tab-pool')
 
 
 @app.route('/pool/<pool_id>/result/<int:match_id>/clear', methods=['POST'])
@@ -907,7 +959,7 @@ def clear_result(pool_id, match_id):
         match.result = None
         db.session.commit()
         flash('Result cleared.', 'success')
-    return redirect(url_for('pool_view', pool_id=pool_id))
+    return redirect(url_for('pool_view', pool_id=pool_id) + '#tab-pool')
 
 
 # ---------------------------------------------------------------------------
