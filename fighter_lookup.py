@@ -248,7 +248,13 @@ def _lookup_glory(name):
         "record": None,
         "nationality": None,
         "nationality_flag": "",
+        "full_name": None,
     }
+
+    # Full name from API title field
+    title = fighter.get("title", "").strip()
+    if title:
+        result["full_name"] = title
 
     # Image: prefer passport_image (clean portrait), fall back to front_image
     for img_field in ("passport_image", "front_image"):
@@ -294,6 +300,7 @@ def lookup_fighter(name):
         "record": None,
         "nationality": None,
         "nationality_flag": "",
+        "full_name": None,
     }
 
     if not name or not name.strip():

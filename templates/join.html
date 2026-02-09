@@ -8,11 +8,11 @@
 <div class="card" style="margin-top: 1.5rem;">
     <form method="post">
         <label for="name">Your Name</label>
-        <input type="text" name="name" id="name" placeholder="e.g. Daniël" required autofocus>
+        <input type="text" name="name" id="name" placeholder="e.g. Daniël" required autofocus autocomplete="off" data-1p-ignore>
 
         <label for="pin">Choose a 4-Digit PIN</label>
         <input type="password" name="pin" id="pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4"
-               placeholder="e.g. 1234" required>
+               placeholder="e.g. 1234" required autocomplete="off" data-1p-ignore>
         <small class="muted">You'll need this to edit your predictions later.</small>
 
         <button type="submit" class="btn btn-primary btn-full mt-2">Join Pool</button>

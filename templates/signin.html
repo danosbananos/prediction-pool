@@ -8,11 +8,11 @@
 <div class="card" style="margin-top: 1.5rem;">
     <form method="post">
         <label for="name">Your Name</label>
-        <input type="text" name="name" id="name" placeholder="Exactly as you entered it" required autofocus>
+        <input type="text" name="name" id="name" placeholder="Exactly as you entered it" required autofocus autocomplete="off" data-1p-ignore>
 
         <label for="pin">Your 4-Digit PIN</label>
         <input type="password" name="pin" id="pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4"
-               placeholder="Your PIN" required>
+               placeholder="Your PIN" required autocomplete="off" data-1p-ignore>
 
         <button type="submit" class="btn btn-primary btn-full mt-2">Sign In</button>
     </form>

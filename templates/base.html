@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Prediction Pool{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥊</text></svg>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
@@ -138,6 +139,22 @@
         }
 
         /* ── Toast / Flash Messages ── */
+        .flash-container {
+            position: fixed;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            max-width: 640px;
+            padding: 0.5rem 1rem 0;
+            z-index: 1000;
+            pointer-events: none;
+        }
+
+        .flash-container .flash {
+            pointer-events: auto;
+        }
+
         .flash {
             padding: 0.75rem 1rem;
             padding-right: 2.25rem;
@@ -181,14 +198,14 @@
         }
 
         .flash.success {
-            background: var(--green-dim);
-            color: var(--green);
+            background: rgba(46, 204, 113, 0.85);
+            color: #fff;
             border-color: var(--green);
         }
 
         .flash.error {
-            background: rgba(231, 76, 60, 0.15);
-            color: var(--red-wrong);
+            background: rgba(231, 76, 60, 0.85);
+            color: #fff;
             border-color: var(--red-wrong);
         }
 
@@ -1207,12 +1224,14 @@
 
         {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
+        <div class="flash-container">
         {% for category, message in messages %}
         <div class="flash {{ category }}" data-flash-type="{{ category }}">
             {{ message }}
             <button class="flash-dismiss" onclick="dismissFlash(this)" aria-label="Dismiss">&times;</button>
         </div>
         {% endfor %}
+        </div>
         {% endif %}
         {% endwith %}
 
@@ -1223,14 +1242,24 @@
     function dismissFlash(btn) {
         const flash = btn.closest('.flash');
         flash.classList.add('fade-out');
-        setTimeout(() => flash.remove(), 400);
+        setTimeout(() => {
+            flash.remove();
+            // Remove container if empty
+            const container = document.querySelector('.flash-container');
+            if (container && !container.querySelector('.flash')) container.remove();
+        }, 400);
     }
-    // Auto-dismiss success toasts after 4 seconds; errors stay until dismissed
-    document.querySelectorAll('.flash[data-flash-type="success"]').forEach(el => {
+    // Auto-dismiss toasts: success after 4s, errors after 8s
+    document.querySelectorAll('.flash').forEach(el => {
+        const delay = el.dataset.flashType === 'error' ? 8000 : 4000;
         setTimeout(() => {
             el.classList.add('fade-out');
-            setTimeout(() => el.remove(), 400);
-        }, 4000);
+            setTimeout(() => {
+                el.remove();
+                const container = document.querySelector('.flash-container');
+                if (container && !container.querySelector('.flash')) container.remove();
+            }, 400);
+        }, delay);
     });
     </script>
 

@@ -13,7 +13,7 @@ from flask import (
 )
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
-from fighter_lookup import lookup_fighter
+from fighter_lookup import lookup_fighter, _has_abbreviated_first_name
 from odds_lookup import lookup_odds
 
 logger = logging.getLogger(__name__)
@@ -171,7 +171,7 @@ def fetch_fighter_data(match, skip_a=False, skip_b=False):
     if not skip_a:
         data_a = lookup_fighter(match.participant_a)
         logger.info("Lookup result for '%s': %s", match.participant_a, data_a)
-        if any(v for k, v in data_a.items() if k != "nationality_flag"):
+        if any(v for k, v in data_a.items() if k not in ("nationality_flag", "full_name")):
             if data_a.get("image_url"):
                 match.fighter_a_image = data_a["image_url"]
             if data_a.get("record"):
@@ -181,6 +181,9 @@ def fetch_fighter_data(match, skip_a=False, skip_b=False):
             # Flag can be empty string, so use explicit None check
             if data_a.get("nationality_flag") is not None:
                 match.fighter_a_flag = data_a["nationality_flag"] or None
+            # Update abbreviated name to full name (e.g. "A. Bouzid" -> "Ayoub Bouzid")
+            if data_a.get("full_name") and _has_abbreviated_first_name(match.participant_a):
+                match.participant_a = data_a["full_name"]
             found_a = True
     else:
         found_a = True  # already had data
@@ -188,7 +191,7 @@ def fetch_fighter_data(match, skip_a=False, skip_b=False):
     if not skip_b:
         data_b = lookup_fighter(match.participant_b)
         logger.info("Lookup result for '%s': %s", match.participant_b, data_b)
-        if any(v for k, v in data_b.items() if k != "nationality_flag"):
+        if any(v for k, v in data_b.items() if k not in ("nationality_flag", "full_name")):
             if data_b.get("image_url"):
                 match.fighter_b_image = data_b["image_url"]
             if data_b.get("record"):
@@ -197,6 +200,8 @@ def fetch_fighter_data(match, skip_a=False, skip_b=False):
                 match.fighter_b_nationality = data_b["nationality"]
             if data_b.get("nationality_flag") is not None:
                 match.fighter_b_flag = data_b["nationality_flag"] or None
+            if data_b.get("full_name") and _has_abbreviated_first_name(match.participant_b):
+                match.participant_b = data_b["full_name"]
             found_b = True
     else:
         found_b = True  # already had data
@@ -269,7 +274,7 @@ def parse_csv_matches(file_content):
 
         # Optional: odds
         for key in ('odds_a', 'odds_b'):
-            val = row.get(key, '').strip()
+            val = row.get(key, '').strip().replace(',', '.')
             if val:
                 try:
                     match_data[key] = round(float(val), 2)
@@ -558,8 +563,8 @@ def edit_match(pool_id, match_id):
         pass
 
     # Handle odds fields (inline editing from Pool tab)
-    odds_a = request.form.get('odds_a', '').strip()
-    odds_b = request.form.get('odds_b', '').strip()
+    odds_a = request.form.get('odds_a', '').strip().replace(',', '.')
+    odds_b = request.form.get('odds_b', '').strip().replace(',', '.')
     if odds_a is not None or odds_b is not None:
         try:
             match.odds_a = round(float(odds_a), 2) if odds_a else None
@@ -734,8 +739,8 @@ def update_odds(pool_id, match_id):
     if not match or match.pool_id != pool_id:
         abort(404)
 
-    odds_a = request.form.get('odds_a', '').strip()
-    odds_b = request.form.get('odds_b', '').strip()
+    odds_a = request.form.get('odds_a', '').strip().replace(',', '.')
+    odds_b = request.form.get('odds_b', '').strip().replace(',', '.')
 
     try:
         match.odds_a = round(float(odds_a), 2) if odds_a else None
