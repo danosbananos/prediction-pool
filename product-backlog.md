@@ -1,66 +1,49 @@
-# Prediction Pool — Future Ideas
-
-Ideas for future versions. Prioritized — top sections are up next.
+# Prediction Pool — Backlog
 
 ---
 
-## Priority: What to tackle next
+## What to tackle next
 
-### 1. Settings UX overhaul (do together)
-Combines: match editor redesign, odds integration, navigation restructure.
-These are one project — reorganizing the settings/admin experience fixes multiple pain points at once.
+Pick a lane — items within each group are independent and can be done in any order.
 
-### 2. Fighter database + autocomplete
-The two user requests (autocomplete from pool, base fighter table) are the same feature at two levels. Build the database table first, then add autocomplete on top.
+### Quick wins (small, ship in a session)
 
-### 3. Odds auto-fetch investigation
-Quick analysis — is The Odds API viable for Glory events at all? Determines whether to keep, replace, or drop the auto-fetch feature.
+| Item | Description |
+|------|-------------|
+| **Favicon** | Add a favicon so the browser tab isn't blank |
+| **Comma decimals** | Accept commas as decimal separators in odds fields (iPhone NL keyboard shows comma, field only accepts periods) |
+| **Autofill suppression** | Prevent 1Password/autofill popups on Pool Name, Your Name, and PIN fields — blocks the submit button on mobile. Use `autocomplete="off"` or similar attributes |
+| **Abbreviated names → full names** | When fighters have abbreviated first names (e.g. "A. Bouzid") and are successfully fetched from the Glory API, update the match to use the full first name |
+| **Sticky toasts** | Toast notifications should be fixed/sticky so they're always visible, not scrolled off the top of the page |
+
+### UX & gameplay improvements (medium effort)
+
+| Item | Description |
+|------|-------------|
+| **Hide predictions until locked** | Other participants' predictions should be hidden until the pool is locked — prevents copying and adds suspense |
+| **Clean up settings page** | `settings.html` still exists with pool info + delete pool. Fold these into the Pool tab and remove the separate page, or keep it as a minimal "danger zone" |
+
+### Features (larger effort)
+
+| Item | Description |
+|------|-------------|
+| **Fighter database + autocomplete** | Persistent `Fighter` table cached from Glory API. Dropdown on the add-match form auto-fills fighter data. See detailed spec below. |
+| **Browse & join pools** | A view of all pools where users can browse and click to join |
+| **Progressive Web App (PWA)** | Manifest + service worker → installable on mobile home screen |
+| **Pool image/banner** | Let pool creators add a banner image (event poster, etc.) |
+
+### Investigation / infrastructure
+
+| Item | Description |
+|------|-------------|
+| **Odds auto-fetch** | The Odds API has never returned results for Glory events. Investigate viability, alternatives, or drop the feature. See detailed spec below. |
+| **Production DB access** | Set up a practical way to inspect/fix production data (Railway CLI, TablePlus, or admin route). See detailed spec below. |
 
 ---
 
-## Settings UX overhaul 🔥 UP NEXT
+## Detailed specs
 
-**Refined plan (after PM discussion):**
-
-### Design principle
-Everyone can be admin, but admin features should never be confused with personal features. The app is used on mobile during fight nights — admin actions (adding matches, updating odds) need to be fast and frictionless under time pressure.
-
-### Two-tab layout on the pool page
-
-Replace the current single-page layout + separate settings page with two tabs on the pool page:
-
-**"My Predictions" tab (default view):**
-- Personal prediction cards for each match
-- Full leaderboard below
-- This is the view 90% of the time — check picks, check standings
-
-**"Pool" tab:**
-- Match cards with inline admin edit controls (for admins)
-- "Add match" button (prominent, fast access during fight night)
-- "Lock pool" toggle (clearly a pool-wide action, not personal)
-- Pool info / settings
-
-The tab split solves the core confusion: "Lock pool" lives in the Pool tab, predictions live in My Predictions. No one will confuse a pool action with a personal action.
-
-### Match editor redesign (within the Pool tab)
-
-Each match is a **compact card** that expands in-place when tapped (one card open at a time):
-- Fighter A name — Fighter A odds
-- Fighter B name — Fighter B odds
-- Multiplier field — Re-fetch odds button — Save button — Delete button
-- Save button saves everything in one go (names, odds, fighter data, multiplier)
-- Rename "Edit Match" → "Match", "Delete Match" → "Delete"
-
-### Quick win (can ship independently)
-- Rename "Lock" button to "Lock pool"
-- Add subtitle text: "No one can change predictions after locking"
-
-### What this replaces
-- The separate `settings.html` page goes away (or is reduced to pool info/danger zone only)
-- The nested `<details>` dropdowns ("Edit Match", "Odds", "Fighter Data") are replaced by the unified compact card editor
-- Navigation confusion is resolved by the tab split
-
-## Fighter database + autocomplete
+### Fighter database + autocomplete
 
 User-requested feature (multiple users):
 
@@ -82,11 +65,11 @@ The core insight: this is a **persistent fighter cache with auto-fill**, not a c
 **Design notes:**
 - Dropdown should show "Name (nationality)" or similar to handle name conflicts
 - Always update saved data when Glory API is re-fetched (cache, not snapshot)
-- Build this *after* the settings UX overhaul — the dropdown goes into the new match editor, not the old one
+- The dropdown goes into the match editor in the Pool tab
 
 **Future freebie (not in scope now):** fighter cards showing cross-pool history ("appeared in 3 pools, predicted correctly 67% of the time")
 
-## Odds auto-fetch: investigation needed 🔍
+### Odds auto-fetch: investigation needed
 
 The odds retrieval feature has never successfully returned results. Analysis of `odds_lookup.py` reveals the likely cause: it only queries `mma_mixed_martial_arts` on The Odds API. Glory Kickboxing events are niche and probably not listed under that sport key.
 
@@ -101,58 +84,47 @@ If no API covers Glory events and bookmaker sites are too JS-heavy to scrape, an
 
 **Decision:** Investigate first, then either fix the integration, switch providers, try screenshot extraction, or remove the feature and streamline manual entry.
 
-## PostgreSQL production database access
+### PostgreSQL production database access
 
 Currently there's no practical way to inspect or fix production data. Options to explore (least coding required):
 
 - **Railway CLI:** `railway connect` gives a psql shell directly to the production database
 - **Railway dashboard:** Has a built-in data browser for PostgreSQL
 - **pgAdmin / TablePlus:** Connect with the `DATABASE_URL` credentials from Railway
-- **Read-only replica:** Railway supports read replicas for safe browsing
 - **Admin route in app:** A lightweight `/admin/db` page showing table contents (auth-protected) — but this requires coding
 
 Pick the simplest option and document how to use it.
 
 ---
 
-## Bugfixes & Improvements
+## Completed
 
-- Add a favicon
-- ~~Fix "None" appearing before fighter names~~ ✅ Fixed in ca659fe
-- ~~Fix flags not displaying at fighter names~~ ✅ Fixed in ca659fe
-- ~~Review the fetch fighter data feature — currently not producing results~~ ✅ Fixed with Glory API (aeee255)
-- ~~Investigate deployment without re-creating the database~~ ✅ Resolved with PostgreSQL migration (aad3a52)
-- ~~Fix: cannot save predictions on matches added to a re-opened pool~~ ✅ Fixed
-- Hide predictions from other participants until the pool is locked
-- Accept commas as decimal separators in odds fields (iPhone NL keyboard shows comma, field only accepts periods)
-- Toast notifications should be fixed/sticky so they're always visible, not at the top of the page requiring scroll
-- Enable Progressive Web App (PWA) — manifest, service worker, installable on mobile
-- Prevent 1Password/autofill popups on Pool Name, Your Name, and PIN fields (blocks the submit button on mobile) — use `autocomplete="off"` or similar attributes
-- When fighters have abbreviated first names (e.g. "A. Bouzid") and are successfully fetched from the Glory API, update the name in the match to the full first name
+### Settings UX overhaul ✅ DONE (76798aa)
+- Two-tab layout on pool page (My Predictions + Pool)
+- Compact match editor cards with expand/collapse in Pool tab
+- Lock Pool button with subtitle text
+- Separate settings page reduced to pool info + delete (still exists)
 
-## New Features
-
-- Add a view of all pools where a user can browse and click to join
-- Add an image/banner to a pool
-
----
-
-## Completed sections
+### Sign out ✅ DONE
+- Sign out button in pool header (top-right)
+- Clears session for that pool only
 
 ### Enhanced Match Data ✅ DONE
-- ~~Collect data and images on specific fights and participants~~
-- ~~Pull fight history for each fighter (record, weight class, recent results)~~
-- ~~Show fighter stats alongside prediction interface~~
 - Auto-fetched from Glory API (primary) + Wikipedia/Wikidata (fallback)
 - Manual override available in settings
 
 ### Odds & Scoring ✅ DONE
-- ~~Fetch betting odds from external sources (hybrid: auto + manual fallback)~~
-- ~~Display decimal (European) odds on each match card~~
-- ~~New scoring: **score = odds x multiplier** (replaces old fixed-point system)~~
-- ~~Rename "points" to "multiplier" throughout the app~~
-- Auto-fetch via The Odds API (set `ODDS_API_KEY` env var), manual entry fallback
+- Decimal (European) odds on each match card
+- Scoring: **score = odds x multiplier**
+- Auto-fetch via The Odds API (set `ODDS_API_KEY`), manual entry fallback
 - CSV upload for bulk-importing matches with odds and fighter data
+
+### Bugfixes (resolved)
+- Fix "None" appearing before fighter names (ca659fe)
+- Fix flags not displaying at fighter names (ca659fe)
+- Fix fetch fighter data feature (Glory API — aeee255)
+- Fix deployment without re-creating database (PostgreSQL migration — aad3a52)
+- Fix: cannot save predictions on matches added to a re-opened pool
 
 ---
 

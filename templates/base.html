@@ -75,6 +75,40 @@
             position: relative;
         }
 
+        .user-bar {
+            position: absolute;
+            top: 0.75rem;
+            right: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .user-bar strong {
+            color: var(--text);
+        }
+
+        .user-bar form { margin: 0; }
+
+        .user-bar .btn-sign-out {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            padding: 0.15rem 0.5rem;
+            font-size: 0.7rem;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-family: var(--font-body);
+            transition: color 0.2s, border-color 0.2s;
+        }
+
+        .user-bar .btn-sign-out:hover {
+            color: var(--text);
+            border-color: var(--text-muted);
+        }
+
         .site-header::after {
             content: '';
             display: block;
@@ -1166,6 +1200,7 @@
 <body>
     <main class="container">
         <header class="site-header">
+            {% block user_bar %}{% endblock %}
             <h1>{% block header %}Prediction Pool{% endblock %}</h1>
             <div class="subtitle">{% block subheader %}{% endblock %}</div>
         </header>
