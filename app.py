@@ -9,7 +9,7 @@ from functools import wraps
 
 from flask import (
     Flask, render_template, request, redirect, url_for,
-    flash, session, abort, jsonify
+    flash, session, abort, jsonify, Response, stream_with_context
 )
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -43,6 +43,13 @@ app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
+
+
+@app.template_filter('country_flag')
+def country_flag_filter(code):
+    if not code or len(code) != 2:
+        return ''
+    return ''.join(chr(0x1F1E6 + ord(c) - ord('A')) for c in code.upper())
 
 
 # ---------------------------------------------------------------------------
@@ -140,6 +147,29 @@ class Prediction(db.Model):
     __table_args__ = (
         db.UniqueConstraint('participant_id', 'match_id', name='uq_participant_match'),
     )
+
+
+class Fighter(db.Model):
+    id               = db.Column(db.Integer, primary_key=True)
+    glory_id         = db.Column(db.Integer, unique=True, nullable=True)
+    slug             = db.Column(db.String(200), unique=True, nullable=False)
+    name             = db.Column(db.String(200), nullable=False)
+    first_name       = db.Column(db.String(100))
+    last_name        = db.Column(db.String(100))
+    wins             = db.Column(db.Integer, default=0)
+    losses           = db.Column(db.Integer, default=0)
+    draws            = db.Column(db.Integer, default=0)
+    kos              = db.Column(db.Integer, default=0)
+    nationality      = db.Column(db.String(100))
+    nationality_code = db.Column(db.String(10))
+    image_url        = db.Column(db.String(500))
+    weight_class     = db.Column(db.String(100))
+    height           = db.Column(db.Float)
+    weight           = db.Column(db.Float)
+    nickname         = db.Column(db.String(200))
+    retired          = db.Column(db.Boolean, default=False)
+    ranking          = db.Column(db.String(50))
+    last_synced      = db.Column(db.DateTime)
 
 
 # ---------------------------------------------------------------------------
@@ -1010,11 +1040,265 @@ def edit_pool(pool_id):
 
 
 # ---------------------------------------------------------------------------
+# Routes — Global Settings (Fighter Database)
+# ---------------------------------------------------------------------------
+
+@app.route('/settings')
+def global_settings():
+    fighter_count = Fighter.query.count()
+    search_query = request.args.get('q', '').strip()
+    page = request.args.get('page', 1, type=int)
+    per_page = 25
+
+    query = Fighter.query
+    if search_query:
+        like = f'%{search_query}%'
+        query = query.filter(
+            db.or_(
+                Fighter.first_name.ilike(like),
+                Fighter.last_name.ilike(like),
+                Fighter.name.ilike(like),
+            )
+        )
+    query = query.order_by(Fighter.last_name.asc(), Fighter.first_name.asc())
+    total = query.count()
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    page = max(1, min(page, total_pages))
+    fighters = query.offset((page - 1) * per_page).limit(per_page).all()
+
+    return render_template('fighters_settings.html',
+                           fighter_count=fighter_count,
+                           fighters=fighters,
+                           page=page,
+                           total_pages=total_pages,
+                           search_query=search_query)
+
+
+@app.route('/settings/sync-fighters', methods=['POST'])
+def sync_fighters():
+    import urllib.request
+    import urllib.parse
+    import json as _json
+
+    API_BASE = 'https://glory-api.pinkyellow.computer/api/collections/fighters/entries'
+    LIMIT = 50
+    TIMEOUT = 20
+
+    def generate():
+        url = f'{API_BASE}?limit={LIMIT}'
+        processed = 0
+        total = None
+
+        while url:
+            try:
+                req = urllib.request.Request(url, headers={
+                    'User-Agent': 'PredictionPool/1.0'
+                })
+                resp = urllib.request.urlopen(req, timeout=TIMEOUT)
+                page = _json.loads(resp.read())
+            except Exception as e:
+                yield _json.dumps({'error': str(e)}) + '\n'
+                return
+
+            if total is None:
+                total = page.get('meta', {}).get('total', 0)
+
+            for entry in page.get('data', []):
+                glory_id = entry.get('id')
+                slug = entry.get('slug')
+                if not glory_id or not slug:
+                    continue
+
+                fighter = Fighter.query.filter_by(slug=slug).first()
+                if not fighter:
+                    fighter = Fighter(glory_id=glory_id, slug=slug, name=entry.get('title', slug))
+                    db.session.add(fighter)
+
+                # Update fields — API returns complex objects for some fields
+                fighter.glory_id = glory_id
+                fighter.name = entry.get('title', fighter.name)
+                fighter.first_name = entry.get('first_name')
+                fighter.last_name = entry.get('last_name')
+                fighter.wins = entry.get('wins') or 0
+                fighter.losses = entry.get('losses') or 0
+                fighter.draws = entry.get('draws') or 0
+                fighter.kos = entry.get('kos') or 0
+
+                # nationality is a list of dicts: [{"key": "FR", "label": "France"}]
+                nat = entry.get('nationality')
+                if isinstance(nat, list) and nat:
+                    fighter.nationality = nat[0].get('label')
+                    fighter.nationality_code = nat[0].get('key')
+                elif isinstance(nat, str):
+                    fighter.nationality = nat
+
+                # image_url: front_image/passport_image are dicts with "url" key
+                img = entry.get('front_image') or entry.get('passport_image')
+                if isinstance(img, dict):
+                    fighter.image_url = img.get('url')
+                elif isinstance(img, str):
+                    fighter.image_url = img
+
+                # weight_class is a list of strings: ["welterweight"]
+                wc = entry.get('weight_class')
+                if isinstance(wc, list) and wc:
+                    fighter.weight_class = wc[0]
+                elif isinstance(wc, str):
+                    fighter.weight_class = wc
+
+                fighter.nickname = entry.get('nickname')
+                fighter.retired = bool(entry.get('retired'))
+
+                # ranking is a dict: {"value": "unranked", "label": "Unranked"}
+                rank = entry.get('ranking')
+                if isinstance(rank, dict):
+                    fighter.ranking = rank.get('label') or rank.get('value')
+                elif isinstance(rank, str):
+                    fighter.ranking = rank
+
+                fighter.last_synced = datetime.utcnow()
+
+                # Height/weight — may be strings or numbers
+                for attr in ('height', 'weight'):
+                    val = entry.get(attr)
+                    if val:
+                        try:
+                            setattr(fighter, attr, float(val))
+                        except (ValueError, TypeError):
+                            pass
+
+                processed += 1
+
+            db.session.commit()
+            yield _json.dumps({'processed': processed, 'total': total}) + '\n'
+
+            # Follow pagination
+            next_url = page.get('links', {}).get('next')
+            if next_url and next_url != url:
+                url = next_url
+            else:
+                break
+
+        yield _json.dumps({'done': True, 'total_synced': processed}) + '\n'
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype='application/x-ndjson'
+    )
+
+
+@app.route('/settings/fighter/new')
+def fighter_new():
+    return render_template('fighter_edit.html', fighter=None)
+
+
+@app.route('/settings/fighter/<int:fighter_id>')
+def fighter_edit(fighter_id):
+    fighter = db.session.get(Fighter, fighter_id)
+    if not fighter:
+        abort(404)
+    return render_template('fighter_edit.html', fighter=fighter)
+
+
+@app.route('/settings/fighter/save', methods=['POST'])
+def fighter_save():
+    fighter_id = request.form.get('fighter_id', '').strip()
+
+    if fighter_id:
+        fighter = db.session.get(Fighter, int(fighter_id))
+        if not fighter:
+            abort(404)
+    else:
+        fighter = Fighter()
+        db.session.add(fighter)
+
+    fighter.first_name = request.form.get('first_name', '').strip() or None
+    fighter.last_name = request.form.get('last_name', '').strip() or None
+    fighter.name = request.form.get('name', '').strip() or f"{fighter.first_name or ''} {fighter.last_name or ''}".strip()
+    fighter.nickname = request.form.get('nickname', '').strip() or None
+    fighter.nationality = request.form.get('nationality', '').strip() or None
+    fighter.nationality_code = request.form.get('nationality_code', '').strip() or None
+
+    for int_field in ('wins', 'losses', 'draws', 'kos'):
+        val = request.form.get(int_field, '').strip()
+        try:
+            setattr(fighter, int_field, int(val) if val else 0)
+        except ValueError:
+            setattr(fighter, int_field, 0)
+
+    fighter.weight_class = request.form.get('weight_class', '').strip() or None
+
+    for float_field in ('height', 'weight'):
+        val = request.form.get(float_field, '').strip().replace(',', '.')
+        try:
+            setattr(fighter, float_field, float(val) if val else None)
+        except ValueError:
+            setattr(fighter, float_field, None)
+
+    fighter.image_url = request.form.get('image_url', '').strip() or None
+    fighter.ranking = request.form.get('ranking', '').strip() or None
+    fighter.retired = request.form.get('retired') == 'on'
+
+    # Generate slug for new fighters
+    if not fighter.slug:
+        base_slug = fighter.name.lower().replace(' ', '-')
+        base_slug = ''.join(c for c in base_slug if c.isalnum() or c == '-')
+        slug = base_slug
+        counter = 2
+        with db.session.no_autoflush:
+            while Fighter.query.filter_by(slug=slug).first():
+                slug = f'{base_slug}-{counter}'
+                counter += 1
+        fighter.slug = slug
+
+    db.session.commit()
+    flash(f'Fighter "{fighter.name}" saved.', 'success')
+    return redirect(url_for('global_settings'))
+
+
+@app.route('/settings/fighter/<int:fighter_id>/delete', methods=['POST'])
+def fighter_delete(fighter_id):
+    fighter = db.session.get(Fighter, fighter_id)
+    if not fighter:
+        abort(404)
+    name = fighter.name
+    db.session.delete(fighter)
+    db.session.commit()
+    flash(f'Fighter "{name}" deleted.', 'success')
+    return redirect(url_for('global_settings'))
+
+
+# ---------------------------------------------------------------------------
 # Init DB
 # ---------------------------------------------------------------------------
 
 with app.app_context():
     db.create_all()
+
+    # Migrate: make fighter.glory_id nullable (existing SQLite tables keep old constraint)
+    if database_url.startswith('sqlite'):
+        try:
+            db.session.execute(db.text(
+                "CREATE TABLE IF NOT EXISTS fighter_tmp AS SELECT * FROM fighter WHERE 0"
+            ))
+            db.session.rollback()
+        except Exception:
+            pass
+        # SQLite doesn't support ALTER COLUMN, so check via pragma
+        try:
+            result = db.session.execute(db.text("PRAGMA table_info(fighter)"))
+            cols = {row[1]: row for row in result}
+            if 'glory_id' in cols and cols['glory_id'][3] == 1:  # notnull=1
+                # Recreate table with nullable glory_id
+                db.session.execute(db.text("ALTER TABLE fighter RENAME TO fighter_old"))
+                db.create_all()
+                db.session.execute(db.text(
+                    "INSERT INTO fighter SELECT * FROM fighter_old"
+                ))
+                db.session.execute(db.text("DROP TABLE fighter_old"))
+                db.session.commit()
+        except Exception:
+            db.session.rollback()
 
 
 if __name__ == '__main__':
