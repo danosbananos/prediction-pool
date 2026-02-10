@@ -1230,6 +1230,83 @@
             color: var(--text);
             transform: rotate(45deg);
         }
+
+        /* ── Fighter Autocomplete ── */
+        .autocomplete-wrapper {
+            position: relative;
+        }
+
+        .autocomplete-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            background: var(--bg-card);
+            border: 1px solid var(--border-light);
+            border-top: none;
+            border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+            max-height: 260px;
+            overflow-y: auto;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+            display: none;
+        }
+
+        .autocomplete-dropdown.open {
+            display: block;
+        }
+
+        .autocomplete-item {
+            padding: 0.55rem 0.75rem;
+            cursor: pointer;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: background 0.15s;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .autocomplete-item:last-child {
+            border-bottom: none;
+        }
+
+        .autocomplete-item:hover,
+        .autocomplete-item.active {
+            background: var(--bg-card-hover);
+        }
+
+        .autocomplete-item .ac-flag {
+            font-size: 1rem;
+            min-width: 1.2rem;
+            text-align: center;
+        }
+
+        .autocomplete-item .ac-name {
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .autocomplete-item .ac-record {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-left: auto;
+        }
+
+        .autocomplete-item.ac-create {
+            color: var(--crimson);
+            font-style: italic;
+            font-family: var(--font-condensed);
+            font-weight: 600;
+            font-size: 0.82rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            border-top: 1px solid var(--border-light);
+        }
+
+        .autocomplete-item.ac-create:hover {
+            background: rgba(227, 38, 58, 0.08);
+        }
     </style>
 </head>
 <body>
@@ -1279,6 +1356,121 @@
             }, 400);
         }, delay);
     });
+    </script>
+
+    <script>
+    function initFighterAutocomplete(textInput, hiddenIdInput, poolId) {
+        var wrapper = document.createElement('div');
+        wrapper.className = 'autocomplete-wrapper';
+        textInput.parentNode.insertBefore(wrapper, textInput);
+        wrapper.appendChild(textInput);
+
+        var dropdown = document.createElement('div');
+        dropdown.className = 'autocomplete-dropdown';
+        wrapper.appendChild(dropdown);
+
+        var debounceTimer = null;
+        var activeIndex = -1;
+
+        textInput.setAttribute('autocomplete', 'off');
+
+        textInput.addEventListener('input', function() {
+            hiddenIdInput.value = '';
+            var q = textInput.value.trim();
+            clearTimeout(debounceTimer);
+            if (q.length < 2) {
+                dropdown.classList.remove('open');
+                return;
+            }
+            debounceTimer = setTimeout(function() {
+                fetch('/api/fighters/search?q=' + encodeURIComponent(q))
+                    .then(function(r) { return r.json(); })
+                    .then(function(fighters) {
+                        renderDropdown(fighters, q);
+                    });
+            }, 250);
+        });
+
+        textInput.addEventListener('keydown', function(e) {
+            var items = dropdown.querySelectorAll('.autocomplete-item');
+            if (!dropdown.classList.contains('open') || items.length === 0) return;
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                activeIndex = Math.min(activeIndex + 1, items.length - 1);
+                updateActive(items);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                activeIndex = Math.max(activeIndex - 1, 0);
+                updateActive(items);
+            } else if (e.key === 'Enter' && activeIndex >= 0) {
+                e.preventDefault();
+                items[activeIndex].click();
+            } else if (e.key === 'Escape') {
+                dropdown.classList.remove('open');
+            }
+        });
+
+        function updateActive(items) {
+            items.forEach(function(it, i) {
+                it.classList.toggle('active', i === activeIndex);
+            });
+        }
+
+        function renderDropdown(fighters, query) {
+            dropdown.innerHTML = '';
+            activeIndex = -1;
+            fighters.forEach(function(f) {
+                var item = document.createElement('div');
+                item.className = 'autocomplete-item';
+                var flagSpan = f.flag ? '<span class="ac-flag">' + countryFlag(f.flag) + '</span>' : '';
+                item.innerHTML = flagSpan +
+                    '<span class="ac-name">' + escHtml(f.name) + '</span>' +
+                    (f.record ? '<span class="ac-record">' + escHtml(f.record) + '</span>' : '');
+                item.addEventListener('click', function() {
+                    textInput.value = f.name;
+                    hiddenIdInput.value = f.id;
+                    dropdown.classList.remove('open');
+                });
+                dropdown.appendChild(item);
+            });
+
+            // "Create new fighter" option
+            if (poolId) {
+                var create = document.createElement('div');
+                create.className = 'autocomplete-item ac-create';
+                create.textContent = '+ Create new fighter';
+                create.addEventListener('click', function() {
+                    var field = hiddenIdInput.name === 'fighter_a_id' ? 'a' : 'b';
+                    window.location.href = '/settings/fighter/new?return_pool=' + encodeURIComponent(poolId) +
+                        '&return_field=' + field + '&prefill_name=' + encodeURIComponent(query);
+                });
+                dropdown.appendChild(create);
+            }
+
+            dropdown.classList.toggle('open', dropdown.children.length > 0);
+        }
+
+        function countryFlag(code) {
+            if (!code || code.length !== 2) return '';
+            return String.fromCodePoint(
+                0x1F1E6 + code.toUpperCase().charCodeAt(0) - 65,
+                0x1F1E6 + code.toUpperCase().charCodeAt(1) - 65
+            );
+        }
+
+        function escHtml(s) {
+            var d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+        }
+
+        // Close on outside click
+        document.addEventListener('click', function(e) {
+            if (!wrapper.contains(e.target)) {
+                dropdown.classList.remove('open');
+            }
+        });
+    }
     </script>
 
     {% block scripts %}{% endblock %}

@@ -5,7 +5,11 @@
 {% block subheader %}{{ fighter.name if fighter else 'Create a new fighter' }}{% endblock %}
 
 {% block user_bar %}
+{% if return_pool %}
+<a href="{{ url_for('pool_view', pool_id=return_pool) }}#tab-pool" class="settings-gear" title="Back to Pool">&#8592;</a>
+{% else %}
 <a href="{{ url_for('global_settings') }}" class="settings-gear" title="Back to Settings">&#8592;</a>
+{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -27,12 +31,16 @@
     {% if fighter %}
     <input type="hidden" name="fighter_id" value="{{ fighter.id }}">
     {% endif %}
+    {% if return_pool %}
+    <input type="hidden" name="return_pool" value="{{ return_pool }}">
+    <input type="hidden" name="return_field" value="{{ return_field }}">
+    {% endif %}
 
     <div class="card">
         <div class="section-title" style="margin-top: 0;">Name</div>
 
         <label style="margin-top: 0.5rem;">Name (display)</label>
-        <input type="text" name="name" value="{{ fighter.name if fighter else '' }}" placeholder="Full display name">
+        <input type="text" name="name" value="{{ fighter.name if fighter else (prefill_name or '') }}" placeholder="Full display name">
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
             <div>
