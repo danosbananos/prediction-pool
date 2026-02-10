@@ -1212,6 +1212,24 @@
         .mb-1 { margin-bottom: 0.5rem; }
         .text-center { text-align: center; }
         .overflow-x { overflow-x: auto; }
+
+        /* ── Settings Gear Icon ── */
+        .settings-gear {
+            position: absolute;
+            top: 1rem;
+            right: 0;
+            color: var(--text-dim);
+            font-size: 1.25rem;
+            text-decoration: none;
+            transition: color 0.2s, transform 0.3s;
+            line-height: 1;
+            z-index: 5;
+        }
+
+        .settings-gear:hover {
+            color: var(--text);
+            transform: rotate(45deg);
+        }
     </style>
 </head>
 <body>
