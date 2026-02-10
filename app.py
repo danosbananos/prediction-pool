@@ -100,6 +100,12 @@ class Match(db.Model):
 
     data_fetched = db.Column(db.Boolean, default=False)
 
+    # Link to Fighter database
+    fighter_a_id = db.Column(db.Integer, db.ForeignKey('fighter.id'), nullable=True)
+    fighter_b_id = db.Column(db.Integer, db.ForeignKey('fighter.id'), nullable=True)
+    fighter_a_ref = db.relationship('Fighter', foreign_keys='Match.fighter_a_id')
+    fighter_b_ref = db.relationship('Fighter', foreign_keys='Match.fighter_b_id')
+
     def effective_odds_a(self):
         """Return odds for fighter A, defaulting to 1.0 if not set."""
         return self.odds_a if self.odds_a else 1.0
@@ -332,6 +338,67 @@ def current_participant(pool_id):
     return None
 
 
+def populate_match_from_fighter(match, side, fighter):
+    """Copy Fighter DB data onto Match's denormalized fields for the given side ('a' or 'b')."""
+    record = f"{fighter.wins}-{fighter.losses}-{fighter.draws}" if fighter.wins is not None else None
+    flag = country_flag_filter(fighter.nationality_code) or None
+    if side == 'a':
+        match.participant_a = fighter.name
+        match.fighter_a_image = fighter.image_url
+        match.fighter_a_record = record
+        match.fighter_a_nationality = fighter.nationality
+        match.fighter_a_flag = flag
+    else:
+        match.participant_b = fighter.name
+        match.fighter_b_image = fighter.image_url
+        match.fighter_b_record = record
+        match.fighter_b_nationality = fighter.nationality
+        match.fighter_b_flag = flag
+
+
+def refresh_fighter_from_glory(fighter):
+    """For fighters with a glory_id, fetch latest data from the Glory API and update the record."""
+    if not fighter or not fighter.glory_id:
+        return
+    import urllib.request
+    import json as _json
+
+    API_BASE = 'https://glory-api.pinkyellow.computer/api/collections/fighters/entries'
+    url = f'{API_BASE}/{fighter.glory_id}'
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'PredictionPool/1.0'})
+        resp = urllib.request.urlopen(req, timeout=20)
+        entry = _json.loads(resp.read()).get('data', {})
+    except Exception:
+        return
+
+    if not entry:
+        return
+
+    fighter.name = entry.get('title', fighter.name)
+    fighter.first_name = entry.get('first_name') or fighter.first_name
+    fighter.last_name = entry.get('last_name') or fighter.last_name
+    fighter.wins = entry.get('wins') or fighter.wins or 0
+    fighter.losses = entry.get('losses') or fighter.losses or 0
+    fighter.draws = entry.get('draws') or fighter.draws or 0
+    fighter.kos = entry.get('kos') or fighter.kos or 0
+
+    nat = entry.get('nationality')
+    if isinstance(nat, list) and nat:
+        fighter.nationality = nat[0].get('label')
+        fighter.nationality_code = nat[0].get('key')
+    elif isinstance(nat, str):
+        fighter.nationality = nat
+
+    img = entry.get('front_image') or entry.get('passport_image')
+    if isinstance(img, dict):
+        fighter.image_url = img.get('url')
+    elif isinstance(img, str):
+        fighter.image_url = img
+
+    fighter.last_synced = datetime.utcnow()
+
+
 # ---------------------------------------------------------------------------
 # Routes — Home
 # ---------------------------------------------------------------------------
@@ -530,29 +597,61 @@ def add_match(pool_id):
     except ValueError:
         multiplier = 1
 
+    # Check for linked fighters from autocomplete
+    fighter_a_id = request.form.get('fighter_a_id', '').strip()
+    fighter_b_id = request.form.get('fighter_b_id', '').strip()
+    fighter_a = db.session.get(Fighter, int(fighter_a_id)) if fighter_a_id else None
+    fighter_b = db.session.get(Fighter, int(fighter_b_id)) if fighter_b_id else None
+
     order = len(pool.matches)
     match = Match(pool_id=pool_id, participant_a=a, participant_b=b,
-                  multiplier=multiplier, order=order)
+                  multiplier=multiplier, order=order,
+                  fighter_a_id=int(fighter_a_id) if fighter_a_id else None,
+                  fighter_b_id=int(fighter_b_id) if fighter_b_id else None)
     db.session.add(match)
     db.session.flush()  # get match.id before fetching
 
-    # Auto-fetch fighter data + odds
+    # Populate from Fighter DB if linked, else fetch externally
+    skip_a = False
+    skip_b = False
+    if fighter_a:
+        populate_match_from_fighter(match, 'a', fighter_a)
+        skip_a = True
+    if fighter_b:
+        populate_match_from_fighter(match, 'b', fighter_b)
+        skip_b = True
+
     not_found = []
-    try:
-        result = fetch_fighter_data(match)
-        if not result['found_a']:
-            not_found.append(a)
-        if not result['found_b']:
-            not_found.append(b)
-    except Exception:
-        not_found = [a, b]
+    if not skip_a or not skip_b:
+        try:
+            result = fetch_fighter_data(match, skip_a=skip_a, skip_b=skip_b)
+            if not skip_a and not result['found_a']:
+                not_found.append(a)
+            if not skip_b and not result['found_b']:
+                not_found.append(b)
+        except Exception:
+            if not skip_a:
+                not_found.append(a)
+            if not skip_b:
+                not_found.append(b)
+
     try:
         fetch_odds_data(match)
     except Exception:
         pass  # graceful fallback — match works without odds
 
     db.session.commit()
-    flash(f'Match added: {a} vs {b} (×{multiplier})', 'success')
+
+    # Refresh linked fighters from Glory API (background-safe, non-blocking)
+    for fighter in (fighter_a, fighter_b):
+        if fighter and fighter.glory_id:
+            try:
+                refresh_fighter_from_glory(fighter)
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+
+    flash(f'Match added: {match.participant_a} vs {match.participant_b} (×{multiplier})', 'success')
     if not_found:
         flash(f'Could not find data for: {", ".join(not_found)}. You can enter it manually in the Pool tab.', 'error')
     return redirect(url_for('pool_view', pool_id=pool_id) + '#tab-pool')
@@ -579,6 +678,26 @@ def edit_match(pool_id, match_id):
     a = request.form.get('participant_a', '').strip()
     b = request.form.get('participant_b', '').strip()
     multiplier = request.form.get('multiplier', '1').strip()
+
+    # Handle linked fighters from autocomplete
+    fighter_a_id = request.form.get('fighter_a_id', '').strip()
+    fighter_b_id = request.form.get('fighter_b_id', '').strip()
+    new_fighter_a_id = int(fighter_a_id) if fighter_a_id else None
+    new_fighter_b_id = int(fighter_b_id) if fighter_b_id else None
+    fighter_a_changed = new_fighter_a_id != match.fighter_a_id
+    fighter_b_changed = new_fighter_b_id != match.fighter_b_id
+    match.fighter_a_id = new_fighter_a_id
+    match.fighter_b_id = new_fighter_b_id
+
+    # Re-populate from Fighter DB if the linked fighter changed
+    if fighter_a_changed and new_fighter_a_id:
+        fighter_a_obj = db.session.get(Fighter, new_fighter_a_id)
+        if fighter_a_obj:
+            populate_match_from_fighter(match, 'a', fighter_a_obj)
+    if fighter_b_changed and new_fighter_b_id:
+        fighter_b_obj = db.session.get(Fighter, new_fighter_b_id)
+        if fighter_b_obj:
+            populate_match_from_fighter(match, 'b', fighter_b_obj)
 
     names_changed = False
     if a and a != match.participant_a:
@@ -660,6 +779,18 @@ def edit_match(pool_id, match_id):
                 flash(f'Could not fetch odds: {e}', 'error')
 
     db.session.commit()
+
+    # Refresh linked fighters from Glory API
+    for fid in (new_fighter_a_id, new_fighter_b_id):
+        if fid:
+            fighter_obj = db.session.get(Fighter, fid)
+            if fighter_obj and fighter_obj.glory_id:
+                try:
+                    refresh_fighter_from_glory(fighter_obj)
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+
     if action == 'save':
         flash('Match updated.', 'success')
     if not_found:
@@ -1189,7 +1320,10 @@ def sync_fighters():
 
 @app.route('/settings/fighter/new')
 def fighter_new():
-    return render_template('fighter_edit.html', fighter=None)
+    return render_template('fighter_edit.html', fighter=None,
+                           return_pool=request.args.get('return_pool', ''),
+                           return_field=request.args.get('return_field', ''),
+                           prefill_name=request.args.get('prefill_name', ''))
 
 
 @app.route('/settings/fighter/<int:fighter_id>')
@@ -1197,7 +1331,8 @@ def fighter_edit(fighter_id):
     fighter = db.session.get(Fighter, fighter_id)
     if not fighter:
         abort(404)
-    return render_template('fighter_edit.html', fighter=fighter)
+    return render_template('fighter_edit.html', fighter=fighter,
+                           return_pool='', return_field='', prefill_name='')
 
 
 @app.route('/settings/fighter/save', methods=['POST'])
@@ -1252,8 +1387,53 @@ def fighter_save():
         fighter.slug = slug
 
     db.session.commit()
+
+    # Return-to-pool flow: redirect back to pool with prefill
+    return_pool = request.form.get('return_pool', '').strip()
+    return_field = request.form.get('return_field', '').strip()
+    if return_pool:
+        param = 'prefill_a_id' if return_field == 'a' else 'prefill_b_id'
+        flash(f'Fighter "{fighter.name}" saved.', 'success')
+        return redirect(url_for('pool_view', pool_id=return_pool, **{param: fighter.id}) + '#tab-pool')
+
     flash(f'Fighter "{fighter.name}" saved.', 'success')
     return redirect(url_for('global_settings'))
+
+
+@app.route('/api/fighters/search')
+def api_fighters_search():
+    q = request.args.get('q', '').strip()
+    if len(q) < 2:
+        return jsonify([])
+    like = f'%{q}%'
+    fighters = Fighter.query.filter(
+        db.or_(
+            Fighter.name.ilike(like),
+            Fighter.first_name.ilike(like),
+            Fighter.last_name.ilike(like),
+        )
+    ).order_by(Fighter.name.asc()).limit(10).all()
+    return jsonify([{
+        'id': f.id,
+        'name': f.name,
+        'flag': f.nationality_code or '',
+        'record': f"{f.wins}-{f.losses}-{f.draws}" if f.wins is not None else '',
+        'image_url': f.image_url or '',
+    } for f in fighters])
+
+
+@app.route('/api/fighters/<int:fighter_id>')
+def api_fighter_get(fighter_id):
+    fighter = db.session.get(Fighter, fighter_id)
+    if not fighter:
+        return jsonify({'error': 'Not found'}), 404
+    return jsonify({
+        'id': fighter.id,
+        'name': fighter.name,
+        'flag': fighter.nationality_code or '',
+        'record': f"{fighter.wins}-{fighter.losses}-{fighter.draws}" if fighter.wins is not None else '',
+        'image_url': fighter.image_url or '',
+    })
 
 
 @app.route('/settings/fighter/<int:fighter_id>/delete', methods=['POST'])
@@ -1299,6 +1479,34 @@ with app.app_context():
                 db.session.commit()
         except Exception:
             db.session.rollback()
+
+    # Migrate: add fighter_a_id / fighter_b_id to match table
+    if database_url.startswith('sqlite'):
+        try:
+            result = db.session.execute(db.text("PRAGMA table_info(match)"))
+            cols = {row[1] for row in result}
+            if 'fighter_a_id' not in cols:
+                db.session.execute(db.text("ALTER TABLE match RENAME TO match_old"))
+                db.create_all()
+                # Copy data from old table (new FK columns default to NULL)
+                old_cols = ', '.join(c for c in cols)
+                db.session.execute(db.text(
+                    f"INSERT INTO match ({old_cols}) SELECT {old_cols} FROM match_old"
+                ))
+                db.session.execute(db.text("DROP TABLE match_old"))
+                db.session.commit()
+        except Exception:
+            db.session.rollback()
+    else:
+        # PostgreSQL: just add columns if missing
+        for col in ('fighter_a_id', 'fighter_b_id'):
+            try:
+                db.session.execute(db.text(
+                    f"ALTER TABLE match ADD COLUMN {col} INTEGER REFERENCES fighter(id)"
+                ))
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
 
 
 if __name__ == '__main__':

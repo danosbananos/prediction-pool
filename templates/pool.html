@@ -338,10 +338,12 @@
     <div class="admin-match-body">
         {# Unified match editing form (names, odds, multiplier, fighter data) #}
         <form method="post" action="{{ url_for('edit_match', pool_id=pool.id, match_id=match.id) }}">
+            <input type="hidden" name="fighter_a_id" class="edit-fighter-a-id" value="{{ match.fighter_a_id or '' }}">
+            <input type="hidden" name="fighter_b_id" class="edit-fighter-b-id" value="{{ match.fighter_b_id or '' }}">
             <div class="admin-edit-grid">
                 <div>
                     <label>Fighter A</label>
-                    <input type="text" name="participant_a" value="{{ match.participant_a }}" placeholder="Fighter A">
+                    <input type="text" name="participant_a" class="edit-fighter-a" value="{{ match.participant_a }}" placeholder="Fighter A">
                 </div>
                 <div>
                     <label>Fighter A Odds</label>
@@ -349,7 +351,7 @@
                 </div>
                 <div>
                     <label>Fighter B</label>
-                    <input type="text" name="participant_b" value="{{ match.participant_b }}" placeholder="Fighter B">
+                    <input type="text" name="participant_b" class="edit-fighter-b" value="{{ match.participant_b }}" placeholder="Fighter B">
                 </div>
                 <div>
                     <label>Fighter B Odds</label>
@@ -407,10 +409,12 @@
 {# --- Add match --- #}
 <div class="section-title">Add Match</div>
 <div class="card">
-    <form method="post" action="{{ url_for('add_match', pool_id=pool.id) }}">
+    <form method="post" action="{{ url_for('add_match', pool_id=pool.id) }}" id="add-match-form">
         <div class="inline-form">
-            <input type="text" name="participant_a" placeholder="Fighter A" required style="flex: 2;">
-            <input type="text" name="participant_b" placeholder="Fighter B" required style="flex: 2;">
+            <input type="text" name="participant_a" id="add-fighter-a" placeholder="Fighter A" required style="flex: 2;">
+            <input type="hidden" name="fighter_a_id" id="add-fighter-a-id">
+            <input type="text" name="participant_b" id="add-fighter-b" placeholder="Fighter B" required style="flex: 2;">
+            <input type="hidden" name="fighter_b_id" id="add-fighter-b-id">
             <input type="number" name="multiplier" value="1" min="1" placeholder="×" title="Multiplier" style="flex: 1; max-width: 5rem;">
             <button type="submit" class="btn btn-primary btn-sm">Add</button>
         </div>
@@ -530,5 +534,59 @@ function showSignInToast() {
 if (window.location.hash === '#tab-pool') {
     switchTab('tab-pool');
 }
+
+// --- Fighter Autocomplete ---
+var poolId = '{{ pool.id }}';
+
+// Add-match form autocomplete
+var addA = document.getElementById('add-fighter-a');
+var addAId = document.getElementById('add-fighter-a-id');
+var addB = document.getElementById('add-fighter-b');
+var addBId = document.getElementById('add-fighter-b-id');
+if (addA && addAId) initFighterAutocomplete(addA, addAId, poolId);
+if (addB && addBId) initFighterAutocomplete(addB, addBId, poolId);
+
+// Edit-match form autocomplete (for each admin card)
+document.querySelectorAll('.admin-match-card').forEach(function(card) {
+    var eA = card.querySelector('.edit-fighter-a');
+    var eAId = card.querySelector('.edit-fighter-a-id');
+    var eB = card.querySelector('.edit-fighter-b');
+    var eBId = card.querySelector('.edit-fighter-b-id');
+    if (eA && eAId) initFighterAutocomplete(eA, eAId, poolId);
+    if (eB && eBId) initFighterAutocomplete(eB, eBId, poolId);
+});
+
+// --- Return-after-create prefill ---
+(function() {
+    var params = new URLSearchParams(window.location.search);
+    var prefillAId = params.get('prefill_a_id');
+    var prefillBId = params.get('prefill_b_id');
+    if (prefillAId || prefillBId) {
+        switchTab('tab-pool');
+        // Scroll to add-match form
+        var addForm = document.getElementById('add-match-form');
+        if (addForm) addForm.scrollIntoView({behavior: 'smooth', block: 'center'});
+    }
+    if (prefillAId) {
+        fetch('/api/fighters/' + prefillAId)
+            .then(function(r) { return r.json(); })
+            .then(function(f) {
+                if (f.id) {
+                    document.getElementById('add-fighter-a').value = f.name;
+                    document.getElementById('add-fighter-a-id').value = f.id;
+                }
+            });
+    }
+    if (prefillBId) {
+        fetch('/api/fighters/' + prefillBId)
+            .then(function(r) { return r.json(); })
+            .then(function(f) {
+                if (f.id) {
+                    document.getElementById('add-fighter-b').value = f.name;
+                    document.getElementById('add-fighter-b-id').value = f.id;
+                }
+            });
+    }
+})();
 </script>
 {% endblock %}
