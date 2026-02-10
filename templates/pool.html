@@ -60,10 +60,6 @@
 
 {% if me and pool.status == 'open' %}
 <form method="post" action="{{ url_for('save_predictions', pool_id=pool.id) }}">
-{% elif not me and pool.status == 'open' %}
-<div class="flash info" style="margin-bottom: 1rem;">
-    <a href="{{ url_for('signin', pool_id=pool.id) }}">Sign in</a> or <a href="{{ url_for('join_pool', pool_id=pool.id) }}">join the pool</a> to make your predictions.
-</div>
 {% endif %}
 
 {% for match in pool.matches %}
@@ -95,7 +91,8 @@
         {% else %}
             <div class="fighter-btn
                 {% if match.result == 'a' %}winner-highlight{% endif %}
-                {% if my_pick == 'a' and match.result == 'a' %}correct{% elif my_pick == 'a' and match.result and match.result != 'a' %}wrong{% elif my_pick == 'a' %}selected{% endif %}">
+                {% if my_pick == 'a' and match.result == 'a' %}correct{% elif my_pick == 'a' and match.result and match.result != 'a' %}wrong{% elif my_pick == 'a' %}selected{% endif %}"
+                {% if not me and pool.status == 'open' %}onclick="showSignInToast()"{% endif %}>
                 <div class="fighter-cell">
                     {% if match.fighter_a_image %}
                         <img src="{{ match.fighter_a_image }}" alt="{{ match.participant_a }}" class="fighter-photo">
@@ -133,7 +130,8 @@
         {% else %}
             <div class="fighter-btn
                 {% if match.result == 'b' %}winner-highlight{% endif %}
-                {% if my_pick == 'b' and match.result == 'b' %}correct{% elif my_pick == 'b' and match.result and match.result != 'b' %}wrong{% elif my_pick == 'b' %}selected{% endif %}">
+                {% if my_pick == 'b' and match.result == 'b' %}correct{% elif my_pick == 'b' and match.result and match.result != 'b' %}wrong{% elif my_pick == 'b' %}selected{% endif %}"
+                {% if not me and pool.status == 'open' %}onclick="showSignInToast()"{% endif %}>
                 <div class="fighter-cell">
                     {% if match.fighter_b_image %}
                         <img src="{{ match.fighter_b_image }}" alt="{{ match.participant_b }}" class="fighter-photo">
@@ -500,6 +498,32 @@ function copyLink() {
         btn.textContent = 'Copied!';
         setTimeout(() => btn.textContent = 'Copy', 2000);
     });
+}
+
+function showSignInToast() {
+    // Remove any existing sign-in toast to avoid stacking
+    var existing = document.getElementById('signin-toast');
+    if (existing) existing.remove();
+    var container = document.querySelector('.flash-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.className = 'flash-container';
+        document.querySelector('.container').prepend(container);
+    }
+    var toast = document.createElement('div');
+    toast.id = 'signin-toast';
+    toast.className = 'flash info';
+    toast.dataset.flashType = 'info';
+    toast.innerHTML = '<a href="{{ url_for('signin', pool_id=pool.id) }}">Sign in</a> or <a href="{{ url_for('join_pool', pool_id=pool.id) }}">join the pool</a> to make your predictions.' +
+        '<button class="flash-dismiss" onclick="dismissFlash(this)" aria-label="Dismiss">&times;</button>';
+    container.appendChild(toast);
+    setTimeout(function() {
+        toast.classList.add('fade-out');
+        setTimeout(function() {
+            toast.remove();
+            if (container && !container.querySelector('.flash')) container.remove();
+        }, 400);
+    }, 4000);
 }
 
 // Auto-switch to Pool tab if hash is present
