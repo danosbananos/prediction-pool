@@ -45,6 +45,13 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
 
+@app.template_filter('country_flag')
+def country_flag_filter(code):
+    if not code or len(code) != 2:
+        return ''
+    return ''.join(chr(0x1F1E6 + ord(c) - ord('A')) for c in code.upper())
+
+
 # ---------------------------------------------------------------------------
 # Models
 # ---------------------------------------------------------------------------
@@ -144,7 +151,7 @@ class Prediction(db.Model):
 
 class Fighter(db.Model):
     id               = db.Column(db.Integer, primary_key=True)
-    glory_id         = db.Column(db.Integer, unique=True, nullable=False)
+    glory_id         = db.Column(db.Integer, unique=True, nullable=True)
     slug             = db.Column(db.String(200), unique=True, nullable=False)
     name             = db.Column(db.String(200), nullable=False)
     first_name       = db.Column(db.String(100))
@@ -1039,7 +1046,32 @@ def edit_pool(pool_id):
 @app.route('/settings')
 def global_settings():
     fighter_count = Fighter.query.count()
-    return render_template('fighters_settings.html', fighter_count=fighter_count)
+    search_query = request.args.get('q', '').strip()
+    page = request.args.get('page', 1, type=int)
+    per_page = 25
+
+    query = Fighter.query
+    if search_query:
+        like = f'%{search_query}%'
+        query = query.filter(
+            db.or_(
+                Fighter.first_name.ilike(like),
+                Fighter.last_name.ilike(like),
+                Fighter.name.ilike(like),
+            )
+        )
+    query = query.order_by(Fighter.last_name.asc(), Fighter.first_name.asc())
+    total = query.count()
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    page = max(1, min(page, total_pages))
+    fighters = query.offset((page - 1) * per_page).limit(per_page).all()
+
+    return render_template('fighters_settings.html',
+                           fighter_count=fighter_count,
+                           fighters=fighters,
+                           page=page,
+                           total_pages=total_pages,
+                           search_query=search_query)
 
 
 @app.route('/settings/sync-fighters', methods=['POST'])
@@ -1155,12 +1187,118 @@ def sync_fighters():
     )
 
 
+@app.route('/settings/fighter/new')
+def fighter_new():
+    return render_template('fighter_edit.html', fighter=None)
+
+
+@app.route('/settings/fighter/<int:fighter_id>')
+def fighter_edit(fighter_id):
+    fighter = db.session.get(Fighter, fighter_id)
+    if not fighter:
+        abort(404)
+    return render_template('fighter_edit.html', fighter=fighter)
+
+
+@app.route('/settings/fighter/save', methods=['POST'])
+def fighter_save():
+    fighter_id = request.form.get('fighter_id', '').strip()
+
+    if fighter_id:
+        fighter = db.session.get(Fighter, int(fighter_id))
+        if not fighter:
+            abort(404)
+    else:
+        fighter = Fighter()
+        db.session.add(fighter)
+
+    fighter.first_name = request.form.get('first_name', '').strip() or None
+    fighter.last_name = request.form.get('last_name', '').strip() or None
+    fighter.name = request.form.get('name', '').strip() or f"{fighter.first_name or ''} {fighter.last_name or ''}".strip()
+    fighter.nickname = request.form.get('nickname', '').strip() or None
+    fighter.nationality = request.form.get('nationality', '').strip() or None
+    fighter.nationality_code = request.form.get('nationality_code', '').strip() or None
+
+    for int_field in ('wins', 'losses', 'draws', 'kos'):
+        val = request.form.get(int_field, '').strip()
+        try:
+            setattr(fighter, int_field, int(val) if val else 0)
+        except ValueError:
+            setattr(fighter, int_field, 0)
+
+    fighter.weight_class = request.form.get('weight_class', '').strip() or None
+
+    for float_field in ('height', 'weight'):
+        val = request.form.get(float_field, '').strip().replace(',', '.')
+        try:
+            setattr(fighter, float_field, float(val) if val else None)
+        except ValueError:
+            setattr(fighter, float_field, None)
+
+    fighter.image_url = request.form.get('image_url', '').strip() or None
+    fighter.ranking = request.form.get('ranking', '').strip() or None
+    fighter.retired = request.form.get('retired') == 'on'
+
+    # Generate slug for new fighters
+    if not fighter.slug:
+        base_slug = fighter.name.lower().replace(' ', '-')
+        base_slug = ''.join(c for c in base_slug if c.isalnum() or c == '-')
+        slug = base_slug
+        counter = 2
+        with db.session.no_autoflush:
+            while Fighter.query.filter_by(slug=slug).first():
+                slug = f'{base_slug}-{counter}'
+                counter += 1
+        fighter.slug = slug
+
+    db.session.commit()
+    flash(f'Fighter "{fighter.name}" saved.', 'success')
+    return redirect(url_for('global_settings'))
+
+
+@app.route('/settings/fighter/<int:fighter_id>/delete', methods=['POST'])
+def fighter_delete(fighter_id):
+    fighter = db.session.get(Fighter, fighter_id)
+    if not fighter:
+        abort(404)
+    name = fighter.name
+    db.session.delete(fighter)
+    db.session.commit()
+    flash(f'Fighter "{name}" deleted.', 'success')
+    return redirect(url_for('global_settings'))
+
+
 # ---------------------------------------------------------------------------
 # Init DB
 # ---------------------------------------------------------------------------
 
 with app.app_context():
     db.create_all()
+
+    # Migrate: make fighter.glory_id nullable (existing SQLite tables keep old constraint)
+    if database_url.startswith('sqlite'):
+        try:
+            db.session.execute(db.text(
+                "CREATE TABLE IF NOT EXISTS fighter_tmp AS SELECT * FROM fighter WHERE 0"
+            ))
+            db.session.rollback()
+        except Exception:
+            pass
+        # SQLite doesn't support ALTER COLUMN, so check via pragma
+        try:
+            result = db.session.execute(db.text("PRAGMA table_info(fighter)"))
+            cols = {row[1]: row for row in result}
+            if 'glory_id' in cols and cols['glory_id'][3] == 1:  # notnull=1
+                # Recreate table with nullable glory_id
+                db.session.execute(db.text("ALTER TABLE fighter RENAME TO fighter_old"))
+                db.create_all()
+                db.session.execute(db.text(
+                    "INSERT INTO fighter SELECT * FROM fighter_old"
+                ))
+                db.session.execute(db.text("DROP TABLE fighter_old"))
+                db.session.commit()
+        except Exception:
+            db.session.rollback()
 
 
 if __name__ == '__main__':
