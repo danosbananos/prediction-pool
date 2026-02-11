@@ -314,10 +314,13 @@ Implementation: `body.theme-olympics`, `body.theme-glory` CSS classes with CSS v
 - Wrap the web app in a native shell (React Native, Flutter, or PWA)
 - Push notifications for pool updates, fight results, standings changes
 
-### Enhanced Authentication
-- Avatar-picker auth (choose your icon from a grid)
-- Optional OAuth (Google, Apple) for users who want it
+### User Management
+- Sign in with identity providers (Google, Apple) via OAuth/OpenID Connect
+- Password-based accounts with password reset/retrieval flow (email-based)
+- Migrate existing PIN-based users to full accounts (optional, backward-compatible)
+- User profile page (display name, email, linked identity providers)
 - "Remember me" on device
+- Avatar-picker auth (choose your icon from a grid)
 
 ### Pool Features
 - Pool-level passcode for access control
