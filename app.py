@@ -1240,7 +1240,7 @@ def sync_fighters():
                 if not glory_id or not slug:
                     continue
 
-                fighter = Fighter.query.filter_by(slug=slug).first()
+                fighter = Fighter.query.filter_by(glory_id=glory_id).first()
                 if not fighter:
                     fighter = Fighter(glory_id=glory_id, slug=slug, name=entry.get('title', slug))
                     db.session.add(fighter)
