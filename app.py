@@ -9,7 +9,7 @@ from functools import wraps
 
 from flask import (
     Flask, render_template, request, redirect, url_for,
-    flash, session, abort, jsonify, Response, stream_with_context
+    flash, session, abort, jsonify, Response
 )
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -1203,119 +1203,6 @@ def global_settings():
                            page=page,
                            total_pages=total_pages,
                            search_query=search_query)
-
-
-@app.route('/settings/sync-fighters', methods=['POST'])
-def sync_fighters():
-    import urllib.request
-    import urllib.parse
-    import json as _json
-
-    API_BASE = 'https://glory-api.pinkyellow.computer/api/collections/fighters/entries'
-    LIMIT = 50
-    TIMEOUT = 20
-
-    def generate():
-        url = f'{API_BASE}?limit={LIMIT}'
-        processed = 0
-        total = None
-
-        while url:
-            try:
-                req = urllib.request.Request(url, headers={
-                    'User-Agent': 'PredictionPool/1.0'
-                })
-                resp = urllib.request.urlopen(req, timeout=TIMEOUT)
-                page = _json.loads(resp.read())
-            except Exception as e:
-                yield _json.dumps({'error': str(e)}) + '\n'
-                return
-
-            if total is None:
-                total = page.get('meta', {}).get('total', 0)
-
-            for entry in page.get('data', []):
-                glory_id = entry.get('id')
-                slug = entry.get('slug')
-                if not glory_id or not slug:
-                    continue
-
-                fighter = Fighter.query.filter_by(glory_id=glory_id).first()
-                if not fighter:
-                    fighter = Fighter(glory_id=glory_id, slug=slug, name=entry.get('title', slug))
-                    db.session.add(fighter)
-
-                # Update fields — API returns complex objects for some fields
-                fighter.glory_id = glory_id
-                fighter.name = entry.get('title', fighter.name)
-                fighter.first_name = entry.get('first_name')
-                fighter.last_name = entry.get('last_name')
-                fighter.wins = entry.get('wins') or 0
-                fighter.losses = entry.get('losses') or 0
-                fighter.draws = entry.get('draws') or 0
-                fighter.kos = entry.get('kos') or 0
-
-                # nationality is a list of dicts: [{"key": "FR", "label": "France"}]
-                nat = entry.get('nationality')
-                if isinstance(nat, list) and nat:
-                    fighter.nationality = nat[0].get('label')
-                    fighter.nationality_code = nat[0].get('key')
-                elif isinstance(nat, str):
-                    fighter.nationality = nat
-
-                # image_url: front_image/passport_image are dicts with "url" key
-                img = entry.get('front_image') or entry.get('passport_image')
-                if isinstance(img, dict):
-                    fighter.image_url = img.get('url')
-                elif isinstance(img, str):
-                    fighter.image_url = img
-
-                # weight_class is a list of strings: ["welterweight"]
-                wc = entry.get('weight_class')
-                if isinstance(wc, list) and wc:
-                    fighter.weight_class = wc[0]
-                elif isinstance(wc, str):
-                    fighter.weight_class = wc
-
-                fighter.nickname = entry.get('nickname')
-                fighter.retired = bool(entry.get('retired'))
-
-                # ranking is a dict: {"value": "unranked", "label": "Unranked"}
-                rank = entry.get('ranking')
-                if isinstance(rank, dict):
-                    fighter.ranking = rank.get('label') or rank.get('value')
-                elif isinstance(rank, str):
-                    fighter.ranking = rank
-
-                fighter.last_synced = datetime.utcnow()
-
-                # Height/weight — may be strings or numbers
-                for attr in ('height', 'weight'):
-                    val = entry.get(attr)
-                    if val:
-                        try:
-                            setattr(fighter, attr, float(val))
-                        except (ValueError, TypeError):
-                            pass
-
-                processed += 1
-
-            db.session.commit()
-            yield _json.dumps({'processed': processed, 'total': total}) + '\n'
-
-            # Follow pagination
-            next_url = page.get('links', {}).get('next')
-            if next_url and next_url != url:
-                url = next_url
-            else:
-                break
-
-        yield _json.dumps({'done': True, 'total_synced': processed}) + '\n'
-
-    return Response(
-        stream_with_context(generate()),
-        mimetype='application/x-ndjson'
-    )
 
 
 @app.route('/settings/fighter/new')

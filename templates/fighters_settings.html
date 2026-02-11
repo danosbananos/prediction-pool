@@ -11,70 +11,13 @@
 {% block content %}
 <div class="card" style="margin-top: 1.5rem;">
     <div class="section-title" style="margin-top: 0;">Fighter Database</div>
+    {% if fighter_count > 0 %}
     <p style="margin-bottom: 0.5rem;">
         <small class="muted">
-            Sync all fighters from the Glory Kickboxing API into the local database.
-            {% if fighter_count > 0 %}
             Currently <strong style="color: var(--text);">{{ fighter_count }}</strong> fighters in database.
-            {% else %}
-            No fighters synced yet.
-            {% endif %}
         </small>
     </p>
-
-    <button id="sync-btn" class="btn btn-primary mt-1" onclick="startSync()">
-        Sync Fighters from Glory
-    </button>
-
-    <div id="sync-progress" style="display: none; margin-top: 1rem;">
-        <div style="
-            background: var(--bg-surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            padding: 0.75rem 1rem;
-        ">
-            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-                <div id="sync-spinner" style="
-                    width: 14px; height: 14px;
-                    border: 2px solid var(--border-light);
-                    border-top-color: var(--crimson);
-                    border-radius: 50%;
-                    animation: spin 0.8s linear infinite;
-                "></div>
-                <span id="sync-status" style="
-                    font-family: var(--font-condensed);
-                    font-size: 0.82rem;
-                    font-weight: 600;
-                    text-transform: uppercase;
-                    letter-spacing: 0.06em;
-                    color: var(--text-muted);
-                ">Starting sync...</span>
-            </div>
-            <div style="
-                background: var(--border);
-                border-radius: 3px;
-                height: 6px;
-                overflow: hidden;
-            ">
-                <div id="sync-bar" style="
-                    height: 100%;
-                    width: 0%;
-                    background: var(--crimson);
-                    border-radius: 3px;
-                    transition: width 0.3s ease;
-                "></div>
-            </div>
-        </div>
-    </div>
-
-    <div id="sync-result" style="display: none; margin-top: 0.75rem;">
-        <div id="sync-result-inner" style="
-            padding: 0.65rem 1rem;
-            border-radius: var(--radius-sm);
-            font-size: 0.85rem;
-            font-weight: 500;
-        "></div>
-    </div>
+    {% endif %}
 </div>
 
 <div class="card" style="margin-top: 0.75rem;">
@@ -128,90 +71,9 @@
     {% elif search_query %}
     <p style="margin-top: 1rem; color: var(--text-muted); font-size: 0.85rem;">No fighters found for "{{ search_query }}".</p>
     {% elif fighter_count == 0 %}
-    <p style="margin-top: 1rem; color: var(--text-muted); font-size: 0.85rem;">No fighters in database yet. Sync from Glory or add one manually.</p>
+    <p style="margin-top: 1rem; color: var(--text-muted); font-size: 0.85rem;">No fighters in database yet. Add one manually.</p>
     {% endif %}
 </div>
 {% endblock %}
 
-{% block scripts %}
-<style>
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-</style>
-<script>
-async function startSync() {
-    const btn = document.getElementById('sync-btn');
-    const progress = document.getElementById('sync-progress');
-    const status = document.getElementById('sync-status');
-    const bar = document.getElementById('sync-bar');
-    const spinner = document.getElementById('sync-spinner');
-    const result = document.getElementById('sync-result');
-    const resultInner = document.getElementById('sync-result-inner');
-
-    btn.disabled = true;
-    btn.style.opacity = '0.5';
-    btn.style.cursor = 'not-allowed';
-    progress.style.display = 'block';
-    result.style.display = 'none';
-    bar.style.width = '0%';
-    status.textContent = 'Starting sync...';
-
-    try {
-        const response = await fetch('/settings/sync-fighters', { method: 'POST' });
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop(); // keep incomplete line in buffer
-
-            for (const line of lines) {
-                if (!line.trim()) continue;
-                try {
-                    const data = JSON.parse(line);
-
-                    if (data.error) {
-                        throw new Error(data.error);
-                    }
-
-                    if (data.done) {
-                        status.textContent = 'Sync complete!';
-                        bar.style.width = '100%';
-                        spinner.style.display = 'none';
-                        resultInner.textContent = 'Fighters synced successfully! ' + data.total_synced + ' fighters in database.';
-                        resultInner.style.background = 'rgba(46, 204, 113, 0.15)';
-                        resultInner.style.color = 'var(--green)';
-                        resultInner.style.border = '1px solid rgba(46, 204, 113, 0.3)';
-                        result.style.display = 'block';
-                    } else if (data.processed !== undefined) {
-                        const pct = data.total > 0 ? Math.round((data.processed / data.total) * 100) : 0;
-                        status.textContent = 'Synced ' + data.processed + ' of ' + data.total + ' fighters...';
-                        bar.style.width = pct + '%';
-                    }
-                } catch (e) {
-                    if (e.message !== 'Unexpected end of JSON input') throw e;
-                }
-            }
-        }
-    } catch (err) {
-        spinner.style.display = 'none';
-        status.textContent = 'Sync failed';
-        resultInner.textContent = 'Error: ' + err.message;
-        resultInner.style.background = 'rgba(231, 76, 60, 0.15)';
-        resultInner.style.color = 'var(--red-wrong)';
-        resultInner.style.border = '1px solid rgba(231, 76, 60, 0.3)';
-        result.style.display = 'block';
-    }
-
-    btn.disabled = false;
-    btn.style.opacity = '';
-    btn.style.cursor = '';
-}
-</script>
 {% endblock %}
