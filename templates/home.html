@@ -9,7 +9,19 @@
 {% endblock %}
 
 {% block content %}
+{% if recent_pools %}
 <div class="card" style="margin-top: 1.5rem;">
+    <div class="section-title" style="margin-top: 0;">Your Recent Pools</div>
+    {% for pool in recent_pools %}
+    <a href="{{ url_for('pool_view', pool_id=pool.id) }}" class="recent-pool-item">
+        <span class="recent-pool-name">{{ pool.name }}</span>
+        <span class="status-badge status-{{ pool.status }}">{{ pool.status | capitalize }}</span>
+    </a>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="card" {% if not recent_pools %}style="margin-top: 1.5rem;"{% endif %}>
     <div class="section-title" style="margin-top: 0;">Create a New Pool</div>
     <form method="post" action="{{ url_for('create_pool') }}">
         <label for="pool-name">Pool Name</label>
