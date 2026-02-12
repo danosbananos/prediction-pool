@@ -1205,6 +1205,41 @@
             margin-bottom: 0;
         }
 
+        /* ── Recent Pools ── */
+        .recent-pool-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.7rem 0.85rem;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            margin-bottom: 0.4rem;
+            background: var(--bg-surface);
+            text-decoration: none;
+            color: var(--text);
+            transition: background 0.15s, border-color 0.2s, transform 0.15s;
+        }
+
+        .recent-pool-item:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--border-light);
+            transform: translateX(3px);
+            color: var(--text);
+        }
+
+        .recent-pool-name {
+            font-family: var(--font-condensed);
+            font-weight: 700;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin-right: 0.75rem;
+        }
+
         /* ── Utility ── */
         .ml-auto { margin-left: auto; }
         .mt-1 { margin-top: 0.5rem; }

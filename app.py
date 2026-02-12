@@ -405,7 +405,18 @@ def refresh_fighter_from_glory(fighter):
 
 @app.route('/')
 def home():
-    return render_template('home.html')
+    recent_pools = session.get('recent_pools', [])
+    # Validate pools still exist and refresh status
+    if recent_pools:
+        pool_ids = [r['id'] for r in recent_pools]
+        existing = {p.id: p for p in Pool.query.filter(Pool.id.in_(pool_ids)).all()}
+        recent_pools = [
+            {'id': p.id, 'name': p.name, 'status': p.status}
+            for r in recent_pools
+            if (p := existing.get(r['id']))
+        ]
+        session['recent_pools'] = recent_pools
+    return render_template('home.html', recent_pools=recent_pools)
 
 
 @app.route('/create', methods=['POST'])
@@ -429,6 +440,12 @@ def create_pool():
 def pool_view(pool_id):
     pool = get_pool_or_404(pool_id)
     me = current_participant(pool_id)
+
+    # Track this pool in the session for "recent pools" on home page
+    recent = session.get('recent_pools', [])
+    recent = [r for r in recent if r['id'] != pool.id]
+    recent.insert(0, {'id': pool.id, 'name': pool.name, 'status': pool.status})
+    session['recent_pools'] = recent[:5]
 
     # Build leaderboard
     leaderboard = sorted(pool.participants, key=lambda p: p.score(), reverse=True)

@@ -18,6 +18,7 @@ Pick a lane — items within each group are independent and can be done in any o
 |------|-------------|
 | **Hide predictions until locked** | Other participants' predictions should be hidden until the pool is locked — prevents copying and adds suspense |
 | **Clean up settings page** | `settings.html` still exists with pool info + delete pool. Fold these into the Pool tab and remove the separate page, or keep it as a minimal "danger zone" |
+| **Recent pools on home page** | Show a cookie-based list of recently visited pools on the home page so users can get back to their pools without needing the original link. No auth required — works with current PIN-based system. Stepping stone toward the full "my pools" dashboard under User Management. |
 
 ### Features (larger effort)
 
@@ -27,7 +28,7 @@ Pick a lane — items within each group are independent and can be done in any o
 | **Competition framework (v1)** | Generalizable competition system — pools are linked to a competition (Glory event, Olympics, etc.) with start/end dates, theming, and optional Wikidata-powered event import. v1 covers 1v1 events only. See detailed spec below. |
 | **Multi-participant predictions (v2)** | Extend the prediction model to support events with many participants (ski jump, 100m sprint, etc.). Dropdown to pick the winner from a list. Depends on competition framework v1. See detailed spec below. |
 | **Pool auto-close on event end** | Pools linked to a competition should automatically close for joining when the competition end date has passed. Applies to all competition types (Glory, Olympics, etc.). |
-| **Browse & join pools** | A view of all pools where users can browse and click to join |
+| **My pools dashboard** | Persistent view of all pools a user is a member of, accessible across devices. Depends on User Management (needs persistent identity to link participations). Replaces the old "Browse & join pools" idea — the real need is finding your own pools, not discovering strangers' pools. |
 | **Progressive Web App (PWA)** | Manifest + service worker → installable on mobile home screen |
 | **Pool image/banner** | Let pool creators add a banner image (event poster, etc.) |
 
@@ -314,10 +315,13 @@ Implementation: `body.theme-olympics`, `body.theme-glory` CSS classes with CSS v
 - Wrap the web app in a native shell (React Native, Flutter, or PWA)
 - Push notifications for pool updates, fight results, standings changes
 
-### Enhanced Authentication
-- Avatar-picker auth (choose your icon from a grid)
-- Optional OAuth (Google, Apple) for users who want it
+### User Management
+- Sign in with identity providers (Google, Apple) via OAuth/OpenID Connect
+- Password-based accounts with password reset/retrieval flow (email-based)
+- Migrate existing PIN-based users to full accounts (optional, backward-compatible)
+- User profile page (display name, email, linked identity providers)
 - "Remember me" on device
+- Avatar-picker auth (choose your icon from a grid)
 
 ### Pool Features
 - Pool-level passcode for access control
